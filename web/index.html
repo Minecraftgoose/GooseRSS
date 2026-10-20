@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<title>GooseRSS 阅读器 — 新文章提醒</title>
+  <link rel="icon" type="image/png" href="icons/app.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body class="theme-light">
+
+<div class="app">
+
+  <!-- ============ 顶栏 ============ -->
+  <header class="toolbar">
+    <img class="logo" src="icons/app.png" alt="">
+    <span class="brand">GooseRSS 阅读器</span>
+
+    <button class="btn primary" id="btn-add" title="添加订阅源">
+      <img src="icons/add.png" alt=""><span>添加订阅</span>
+    </button>
+    <button class="btn" id="btn-refresh" title="立即检查新文章">
+      <img src="icons/refresh.png" alt=""><span>检查更新</span>
+    </button>
+    <button class="btn" id="btn-readall" title="把当前范围标为已读">
+      <img src="icons/check.png" alt=""><span>全部已读</span>
+    </button>
+
+    <div class="views">
+      <button class="seg" data-view="all">全部</button>
+      <button class="seg" data-view="unread">未读</button>
+      <button class="seg" data-view="starred">收藏</button>
+    </div>
+
+    <div class="search">
+      <img src="icons/search.png" alt="">
+      <input type="text" id="search" placeholder="搜索标题 / 摘要…" autocomplete="off">
+      <button class="clear-search" id="search-clear" title="清空">
+        <img src="icons/close.png" alt=""></button>
+    </div>
+
+    <span class="spacer"></span>
+
+    <button class="btn icon" id="btn-theme" title="切换深浅色">
+      <img src="icons/moon.png" alt="">
+    </button>
+    <button class="btn icon" id="btn-settings" title="设置">
+      <img src="icons/settings.png" alt="">
+    </button>
+    <button class="btn icon" id="btn-notify" title="暂停 / 恢复提醒">
+      <img src="icons/bell.png" alt="">
+    </button>
+  </header>
+
+  <!-- ============ 主体 ============ -->
+  <div class="main">
+    <aside class="sidebar">
+      <div class="side-scroll" id="sidebar"></div>
+      <div class="side-foot">
+        <button class="linkbtn" id="btn-newgroup">＋ 新建分组</button>
+      </div>
+    </aside>
+
+    <section class="content">
+      <!-- ===== 视图一：文章列表 ===== -->
+      <div class="view" id="view-list">
+        <div class="list-head" id="list-head">
+          <span class="col-title">标题</span>
+          <span class="col-source">来源</span>
+          <span class="col-time">时间</span>
+        </div>
+        <div class="list" id="list"></div>
+        <div class="list-empty" id="list-empty">还没有文章，先添加几个订阅源吧。</div>
+        <div class="list-more" id="list-more">正在加载…</div>
+      </div>
+
+      <!-- ===== 视图二：阅读（SPA 内的独立页，不再另开窗口）===== -->
+      <div class="view reader" id="view-reader" hidden>
+        <div class="r-head">
+          <div class="r-title-row">
+            <button class="btn" id="r-back" title="返回列表 (Esc)">
+              <img src="icons/left.png" alt=""><span>返回</span>
+            </button>
+            <h1 class="r-title" id="r-title">正在加载…</h1>
+          </div>
+          <div class="r-bar">
+            <button class="btn" id="r-browser" title="浏览器打开 (Ctrl+O)">
+              <img src="icons/globe.png" alt=""><span>浏览器打开</span>
+            </button>
+            <button class="btn" id="r-star" title="收藏 (Ctrl+S)">
+              <img src="icons/star.png" alt=""><span>收藏</span>
+            </button>
+            <button class="btn" id="r-unread" title="标为未读">
+              <img src="icons/unread.png" alt=""><span>标为未读</span>
+            </button>
+            <button class="btn" id="r-copy" title="复制链接">
+              <img src="icons/clipboard.png" alt=""><span>复制链接</span>
+            </button>
+            <span class="spacer"></span>
+            <button class="btn icon" id="r-prev" title="上一篇 (←)">
+              <img src="icons/left.png" alt="">
+            </button>
+            <button class="btn icon" id="r-next" title="下一篇 (→)">
+              <img src="icons/right.png" alt="">
+            </button>
+          </div>
+        </div>
+        <div class="r-meta muted" id="r-meta"></div>
+        <div class="r-body" id="r-body">
+          <div class="waiting muted">正在加载正文…</div>
+        </div>
+        <div class="r-images muted" id="r-images"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============ 状态栏 ============ -->
+  <footer class="statusbar">
+    <span id="status-text">就绪</span>
+    <span class="spacer"></span>
+    <span class="progress" id="progress" hidden>
+      <span class="bar"><i id="progress-bar"></i></span>
+      <span id="progress-text"></span>
+    </span>
+    <span id="stats"></span>
+  </footer>
+</div>
+
+<!-- ============ 添加订阅源 ============ -->
+<div class="mask" id="mask-add" hidden>
+  <div class="dialog wide">
+    <div class="dlg-head">
+      <img src="icons/add.png" alt="">
+      <h3>添加订阅源</h3>
+      <button class="x" data-close="mask-add"><img src="icons/close.png" alt=""></button>
+    </div>
+    <div class="dlg-body">
+      <label class="field-label">订阅地址（每行一个，也支持逗号 / 空格分隔；# 开头为注释）</label>
+      <textarea id="add-urls" class="input-area" rows="6"
+        placeholder="https://www.ruanyifeng.com/blog/atom.xml&#10;https://blog.cyann.top/atom.xml"></textarea>
+      <div class="row">
+        <label class="mini">分组</label>
+        <input type="text" id="add-group" class="input" placeholder="可留空">
+        <button class="btn" id="btn-probe">
+          <img src="icons/search.png" alt=""><span>检测全部</span>
+        </button>
+        <button class="btn" id="btn-selectok">
+          <img src="icons/check.png" alt=""><span>全选可用</span>
+        </button>
+        <span class="spacer"></span>
+        <button class="linkbtn" id="btn-import-opml">从 OPML 导入…</button>
+      </div>
+      <table class="grid" id="probe-table">
+        <thead><tr>
+          <th class="c-check">导入</th><th class="c-status">状态</th>
+          <th>标题</th><th>地址</th><th class="c-count">文章</th>
+        </tr></thead>
+        <tbody id="probe-body"></tbody>
+      </table>
+      <div class="hint" id="probe-hint">等待输入地址</div>
+    </div>
+    <div class="dlg-foot">
+      <span class="hint" id="probe-status"></span>
+      <span class="spacer"></span>
+      <button class="btn" data-close="mask-add">取消</button>
+      <button class="btn primary" id="btn-add-ok">
+        <img src="icons/add.png" alt=""><span>导入勾选的订阅源</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 编辑订阅源 ============ -->
+<div class="mask" id="mask-edit" hidden>
+  <div class="dialog">
+    <div class="dlg-head">
+      <img src="icons/edit.png" alt="">
+      <h3>编辑订阅源</h3>
+      <button class="x" data-close="mask-edit"><img src="icons/close.png" alt=""></button>
+    </div>
+    <div class="dlg-body">
+      <div class="row"><label class="mini w">标题</label>
+        <input type="text" id="ed-title" class="input grow"></div>
+      <div class="row"><label class="mini w">地址</label>
+        <input type="text" id="ed-url" class="input grow"></div>
+      <div class="row"><label class="mini w">主页</label>
+        <input type="text" id="ed-site" class="input grow"></div>
+      <div class="row"><label class="mini w">分组</label>
+        <input type="text" id="ed-group" class="input grow"></div>
+      <div class="row"><label class="mini w">标签</label>
+        <input type="text" id="ed-tags" class="input grow" placeholder="逗号分隔"></div>
+      <div class="row"><label class="mini w">备注</label>
+        <input type="text" id="ed-note" class="input grow"></div>
+      <div class="row"><label class="mini w">刷新周期</label>
+        <input type="number" id="ed-minutes" class="input short" min="0"> 分钟
+        <span class="hint">（0 = 用全局周期）</span></div>
+      <div class="row"><label class="mini w">启用</label>
+        <input type="checkbox" id="ed-enabled"></div>
+      <div class="hint" id="ed-status"></div>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn danger" id="btn-del-feed">删除</button>
+      <span class="spacer"></span>
+      <button class="btn" data-close="mask-edit">取消</button>
+      <button class="btn primary" id="btn-edit-ok">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 设置 ============ -->
+<div class="mask" id="mask-set" hidden>
+  <div class="dialog">
+    <div class="dlg-head">
+      <img src="icons/settings.png" alt="">
+      <h3>设置</h3>
+      <button class="x" data-close="mask-set"><img src="icons/close.png" alt=""></button>
+    </div>
+    <div class="dlg-body">
+      <div class="tabs" id="set-tabs">
+        <button class="tab on" data-tab="p-notify">通知</button>
+        <button class="tab" data-tab="p-refresh">刷新</button>
+        <button class="tab" data-tab="p-look">外观</button>
+        <button class="tab" data-tab="p-data">数据</button>
+        <button class="tab" data-tab="p-about">关于</button>
+      </div>
+
+      <div class="page" id="p-notify">
+        <label class="check"><input type="checkbox" id="s-notify-enabled"> 启用新文章提醒</label>
+        <div class="row"><label class="mini w">每个源合并条数</label>
+          <input type="number" id="s-per-feed" class="input short"></div>
+        <div class="row"><label class="mini w">一次最多</label>
+          <input type="number" id="s-max-total" class="input short"></div>
+        <label class="check"><input type="checkbox" id="s-sound"> 提示音</label>
+        <label class="check"><input type="checkbox" id="s-system"> 使用系统通知（Win10/11 推荐）</label>
+        <div class="row"><label class="mini w">免打扰时段</label>
+          <input type="text" id="s-quiet" class="input" placeholder="如 23:00-07:30"></div>
+        <div class="row">
+          <button class="btn" id="btn-test-notify">
+            <img src="icons/bell.png" alt=""><span>发一条测试通知</span></button>
+          <span class="hint" id="notify-backends"></span>
+        </div>
+      </div>
+
+      <div class="page" id="p-refresh" hidden>
+        <div class="row"><label class="mini w">全局周期</label>
+          <input type="number" id="s-interval" class="input short"> 分钟</div>
+        <div class="row"><label class="mini w">超时</label>
+          <input type="number" id="s-timeout" class="input short"> 秒</div>
+        <div class="row"><label class="mini w">并发</label>
+          <input type="number" id="s-workers" class="input short"></div>
+        <label class="check"><input type="checkbox" id="s-autostart"> 启动即隐藏到托盘</label>
+        <label class="check"><input type="checkbox" id="s-tray"> 关闭窗口时缩到托盘</label>
+      </div>
+
+      <div class="page" id="p-look" hidden>
+        <div class="row"><label class="mini w">主题</label>
+          <select id="s-theme" class="input">
+            <option value="light">浅色</option>
+            <option value="dark">深色</option>
+          </select></div>
+        <div class="row"><label class="mini w">界面字体</label>
+          <select id="s-fontfamily" class="input"></select></div>
+        <div class="row"><label class="mini w">界面字号</label>
+          <input type="number" id="s-uifontsize" class="input short"> px</div>
+        <div class="row"><label class="mini w">正文字号</label>
+          <input type="number" id="s-fontsize" class="input short"> px</div>
+        <div class="row"><label class="mini w">侧栏宽度</label>
+          <input type="number" id="s-treewidth" class="input short"> px</div>
+        <div class="row"><label class="mini w">窗口大小</label>
+          <input type="number" id="s-winw" class="input short"> ×
+          <input type="number" id="s-winh" class="input short"> px</div>
+        <div class="row"><button class="btn" id="btn-reset-win">
+          <img src="icons/refresh.png" alt=""><span>恢复默认窗口大小</span></button>
+          <span class="hint" id="win-hint"></span></div>
+        <label class="check"><input type="checkbox" id="s-markread"> 打开文章即标为已读</label>
+      </div>
+
+      <div class="page" id="p-data" hidden>
+        <div class="row">
+          <button class="btn" id="btn-export">
+            <img src="icons/export.png" alt=""><span>导出 OPML…</span></button>
+          <button class="btn" id="btn-import">
+            <img src="icons/import.png" alt=""><span>导入 OPML…</span></button>
+        </div>
+        <div class="row">
+          <button class="btn danger" id="btn-clear">
+            <img src="icons/clean.png" alt=""><span>清空文章（保留收藏）</span></button>
+        </div>
+        <div class="hint" id="data-stats"></div>
+      </div>
+
+      <div class="page" id="p-about" hidden>
+        <div class="about-head">
+          <img class="about-logo" src="icons/app.png" alt="">
+          <div class="about-title">
+            <div class="about-name" id="ab-name"></div>
+            <div class="about-ver">版本 <span id="ab-version"></span></div>
+          </div>
+        </div>
+
+        <div class="about-desc">
+          本地优先的 RSS 订阅提醒工具：后台常驻，谁发了新文章第一时间
+          通知你，点通知直接打开原文。
+        </div>
+
+        <div class="row">
+          <label class="mini w">仓库地址</label>
+          <button class="btn" id="btn-repo">
+            <img src="icons/link.png" alt=""><span id="ab-repo-text"></span></button>
+        </div>
+
+        <div class="row">
+          <button class="btn primary" id="btn-check-update">
+            <img src="icons/refresh.png" alt=""><span>检查更新</span></button>
+          <span class="hint" id="ab-update-status"></span>
+        </div>
+
+        <div class="about-update" id="ab-update" hidden></div>
+      </div>
+    </div>
+    <div class="dlg-foot">
+      <span class="hint" id="set-status"></span>
+      <span class="spacer"></span>
+      <button class="btn" data-close="mask-set">取消</button>
+      <button class="btn primary" id="btn-set-ok">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 页面内气泡（无系统通知时的兜底） ============ -->
+<div class="toasts" id="toasts"></div>
+
+<!-- ============ 右键菜单 ============ -->
+<div class="menu" id="ctxmenu" hidden></div>
+
+<!-- marked：Markdown 解析。有些源（Hexo/Hugo 之类）返回的是 Markdown
+     源文本而不是 HTML，用它渲染出标题、加粗、代码块。
+     改用本地文件而非 CDN：离线可用，也不必依赖外网。 -->
+<script src="vendor/marked.min.js"></script>
+<!-- mark.js：搜索命中高亮。用的是 ES5 版本，IE11 也能跑。
+     体积 40KB 左右，缺了它只是不高亮，不影响其它功能。 -->
+<script src="vendor/mark.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

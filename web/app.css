@@ -1,0 +1,609 @@
+/* Fluent RSS — 界面样式
+   说明：为了兼容 Windows 7 上 pywebview 降级到的 IE11，这里不使用
+   CSS 变量、grid、:focus-within 等新特性；深浅色靠 body 上的
+   theme-light / theme-dark 两套类切换。 */
+
+* { box-sizing: border-box; }
+
+/* hidden 属性的默认样式（display:none）来自浏览器默认表，
+   优先级低于这里任何一条 .mask{display:flex} / .progress{display:inline-flex}，
+   结果就是带 hidden 的弹窗照样显示、且设了 hidden 也关不掉。
+   必须强制声明，否则所有弹窗会同时打开并且无法关闭。 */
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0; padding: 0; height: 100%;
+  overflow: hidden;
+  font-family: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI",
+               "PingFang SC", "Hiragino Sans GB", sans-serif;
+  font-size: 13px;
+}
+
+/* ---------------- 浅色 ---------------- */
+body.theme-light {
+  background: #F3F3F3; color: #1A1A1A;
+}
+body.theme-light .toolbar,
+body.theme-light .statusbar {
+  background: #FAFAFA; border-color: #E0E0E0;
+}
+
+/* ============ 阅读页（原独立窗口，现合并进主页面）============ */
+.reader { height: 100%; }
+.r-head { padding: 10px 14px 8px; border-bottom: 1px solid; flex: 0 0 auto; }
+.r-title-row { display: flex; align-items: center; gap: 8px; }
+.r-title {
+  font-size: 17px; font-weight: 600; line-height: 1.4; margin: 0;
+  flex: 1 1 auto;
+}
+.r-bar { display: flex; align-items: center; gap: 5px; margin-top: 8px; }
+.r-meta { padding: 5px 14px; font-size: 12px; border-bottom: 1px solid; flex: 0 0 auto; }
+.r-body {
+  flex: 1 1 auto; overflow-y: auto; padding: 12px 16px;
+  font-size: 14px; line-height: 1.75;
+}
+.r-body p { margin: 0 0 10px; }
+/* 正文原样渲染后，源站的图片尺寸可能远超阅读区宽度，
+   必须限制最大宽度，否则会撑破布局 */
+.r-body img { max-width: 100%; height: auto; display: block; margin: 8px 0; }
+.r-body video, .r-body iframe { max-width: 100%; }
+/* ---------------- 关于页 ---------------- */
+.about-head {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+}
+.about-logo { width: 44px; height: 44px; flex: 0 0 44px; }
+.about-name { font-size: 15px; font-weight: 600; }
+.about-ver { font-size: 12px; opacity: .7; margin-top: 2px; }
+.about-desc {
+  font-size: 12px; line-height: 1.7; opacity: .8;
+  padding: 8px 10px; border-left: 3px solid #C8C8C8; margin-bottom: 12px;
+}
+body.theme-dark .about-desc { border-left-color: #555; }
+.about-update { margin-top: 10px; }
+.up-new { font-weight: 600; margin-bottom: 6px; }
+.up-ok { opacity: .75; margin-bottom: 6px; }
+.up-err { opacity: .8; margin-bottom: 6px; }
+.up-title { font-size: 13px; margin-bottom: 6px; }
+/* 更新说明是 Markdown 渲染出来的，要单独排版 */
+.up-body {
+  margin-top: 8px; padding: 10px 12px; border-radius: 4px;
+  max-height: 260px; overflow-y: auto; font-size: 13px; line-height: 1.7;
+  border: 1px solid #E0E0E0; background: #FAFAFA;
+}
+body.theme-dark .up-body { border-color: #444; background: #333333; }
+.up-body h1, .up-body h2, .up-body h3 {
+  font-size: 14px; margin: 10px 0 6px; font-weight: 600;
+}
+.up-body h1:first-child, .up-body h2:first-child { margin-top: 0; }
+.up-body p { margin: 0 0 8px; }
+.up-body ul, .up-body ol { margin: 0 0 8px; padding-left: 20px; }
+.up-body li { margin-bottom: 3px; }
+.up-body code {
+  padding: 1px 4px; border-radius: 3px;
+  background: #EEEEEE; font-family: Consolas, monospace; font-size: 12px;
+}
+body.theme-dark .up-body code { background: #2A2A2A; }
+.up-body pre {
+  padding: 8px 10px; border-radius: 4px; overflow-x: auto;
+  background: #F2F2F2; margin: 0 0 8px;
+}
+body.theme-dark .up-body pre { background: #2A2A2A; }
+.up-body a { text-decoration: none; }
+.up-body a:hover { text-decoration: underline; }
+.up-body img { max-width: 100%; height: auto; }
+.up-body blockquote {
+  margin: 0 0 8px; padding-left: 10px; border-left: 3px solid #C8C8C8;
+}
+/* IE11 不支持 flex，关于页头部退回块级 */
+@media all and (-ms-high-contrast: none), (-ms-high-contrast: active) {
+  .about-head { display: block; }
+  .about-logo { display: inline-block; vertical-align: middle; }
+  .about-title { display: inline-block; vertical-align: middle; }
+}
+
+/* 图片加载失败的占位提示 */
+.img-fail {
+  display: inline-block; color: #999; font-size: 12px;
+  border: 1px dashed #CCC; padding: 2px 6px; border-radius: 3px;
+}
+body.theme-dark .img-fail { color: #888; border-color: #555; }
+.r-body table { max-width: 100%; }
+.r-body pre, .r-body code { white-space: pre-wrap; word-break: break-all; }
+.r-body a { text-decoration: none; }
+.r-body a:hover { text-decoration: underline; }
+/* 搜索命中高亮（mark.js 用 <mark> 包裹）*/
+mark.hl { background: #FFE082; color: #1A1A1A; padding: 0 1px; }
+body.theme-dark mark.hl { background: #7A5C00; color: #FFFFFF; }
+.r-body pre { overflow-x: auto; padding: 8px 10px; border-radius: 4px; }
+.r-body blockquote { margin: 0 0 10px; padding-left: 10px; border-left: 3px solid; }
+.r-images { padding: 8px 16px 14px; font-size: 12px; flex: 0 0 auto; }
+.r-images a { word-break: break-all; }
+.waiting { padding: 30px; text-align: center; }
+
+.statusbar { background: #FAFAFA; border-color: #E0E0E0; }
+body.theme-light .sidebar,
+body.theme-light .content { background: #FFFFFF; }
+body.theme-light .list-head,
+body.theme-light .side-foot { background: #F7F7F7; border-color: #E0E0E0; }
+body.theme-light .r-head,
+body.theme-light .r-meta { border-color: #E0E0E0; }
+body.theme-light .r-body pre { background: #F2F2F2; }
+body.theme-light .r-body blockquote { border-left-color: #C8C8C8; }
+body.theme-light .row-item:hover { background: #EFEFEF; }
+body.theme-light .row-item.active { background: #D6EAFB; }
+body.theme-light .node:hover { background: #EFEFEF; }
+body.theme-light .node.active { background: #D6EAFB; color: #10233B; }
+body.theme-light .input,
+body.theme-light .input-area {
+  background: #FFFFFF; color: #1A1A1A; border: 1px solid #C8C8C8;
+}
+body.theme-light .dialog { background: #FFFFFF; border-color: #E0E0E0; }
+body.theme-light .dlg-head,
+body.theme-light .dlg-foot { background: #F7F7F7; border-color: #E0E0E0; }
+body.theme-light .muted,
+body.theme-light .hint { color: #606060; }
+body.theme-light .btn { background: #FFFFFF; color: #1A1A1A; border-color: #C8C8C8; }
+body.theme-light .btn:hover { background: #EFEFEF; }
+body.theme-light .seg { background: #FFFFFF; color: #1A1A1A; border-color: #C8C8C8; }
+body.theme-light .seg.on { background: #0F6CBD; color: #FFFFFF; border-color: #0F6CBD; }
+body.theme-light .grid th { background: #F2F2F2; color: #333333; }
+body.theme-light .grid td,
+body.theme-light .grid th { border-color: #E6E6E6; }
+body.theme-light .menu { background: #FFFFFF; border-color: #D0D0D0; }
+body.theme-light .menu div:hover { background: #EFEFEF; }
+body.theme-light .toast { background: #FFFFFF; color: #1A1A1A; border-color: #C8C8C8; }
+body.theme-light .title-read { color: #8A8A8A; }
+body.theme-light .linkbtn { color: #0F6CBD; }
+body.theme-light .tab.on { background: #D6EAFB; color: #10233B; }
+
+/* ---------------- 深色 ---------------- */
+body.theme-dark {
+  background: #1F1F1F; color: #F2F2F2;
+}
+body.theme-dark .toolbar,
+body.theme-dark .statusbar { background: #2B2B2B; border-color: #3C3C3C; }
+body.theme-dark .r-head,
+body.theme-dark .r-meta { border-color: #3C3C3C; }
+body.theme-dark .r-body pre { background: #1E1E1E; }
+body.theme-dark .r-body blockquote { border-left-color: #4A4A4A; }
+body.theme-dark .sidebar,
+body.theme-dark .content { background: #262626; }
+body.theme-dark .list-head,
+body.theme-dark .side-foot { background: #2B2B2B; border-color: #3C3C3C; }
+body.theme-dark .row-item:hover { background: #333333; }
+body.theme-dark .row-item.active { background: #2E5C7F; }
+body.theme-dark .node:hover { background: #333333; }
+body.theme-dark .node.active { background: #2E5C7F; color: #FFFFFF; }
+body.theme-dark .input,
+body.theme-dark .input-area {
+  background: #2B2B2B; color: #F2F2F2; border: 1px solid #4A4A4A;
+}
+body.theme-dark .dialog { background: #2B2B2B; border-color: #3C3C3C; }
+body.theme-dark .dlg-head,
+body.theme-dark .dlg-foot { background: #232323; border-color: #3C3C3C; }
+body.theme-dark .muted,
+body.theme-dark .hint { color: #ADADAD; }
+body.theme-dark .btn { background: #333333; color: #F2F2F2; border-color: #4A4A4A; }
+body.theme-dark .btn:hover { background: #3E3E3E; }
+body.theme-dark .seg { background: #333333; color: #F2F2F2; border-color: #4A4A4A; }
+body.theme-dark .seg.on { background: #62B5F7; color: #0B2436; border-color: #62B5F7; }
+body.theme-dark .grid th { background: #303030; color: #E0E0E0; }
+body.theme-dark .grid td,
+body.theme-dark .grid th { border-color: #3A3A3A; }
+body.theme-dark .menu { background: #2B2B2B; border-color: #4A4A4A; }
+body.theme-dark .menu div:hover { background: #3E3E3E; }
+body.theme-dark .toast { background: #2B2B2B; color: #F2F2F2; border-color: #4A4A4A; }
+body.theme-dark .title-read { color: #8C8C8C; }
+body.theme-dark .linkbtn { color: #79C0FF; }
+body.theme-dark .tab.on { background: #2E5C7F; color: #FFFFFF; }
+
+/* ---------------- 布局 ---------------- */
+.app { display: flex; flex-direction: column; height: 100%; }
+
+.toolbar {
+  display: flex; align-items: center;
+  padding: 6px 10px; border-bottom: 1px solid;
+  flex: 0 0 auto;
+}
+.logo { width: 20px; height: 20px; margin-right: 6px; }
+.brand { font-weight: 600; margin-right: 10px; }
+.spacer { flex: 1 1 auto; }
+
+.main { display: flex; flex: 1 1 auto; min-height: 0; }
+
+.sidebar {
+  flex: 0 0 232px; display: flex; flex-direction: column;
+  border-right: 1px solid #000000; min-height: 0;
+}
+body.theme-light .sidebar { border-right-color: #E0E0E0; }
+body.theme-dark .sidebar { border-right-color: #3C3C3C; }
+.side-scroll { flex: 1 1 auto; overflow-y: auto; padding: 6px 0; }
+.side-foot { padding: 6px 8px; border-top: 1px solid; }
+
+/* ============ SPA 视图切换 ============ */
+/* 列表页和阅读页互斥，靠 hidden 属性切换。
+   hidden 的默认 display:none 会被 .view{flex} 覆盖，
+   所以文件开头统一加了 [hidden]{display:none!important}。 */
+.view {
+  display: flex; flex-direction: column; flex: 1 1 auto;
+  /* IE11 在 column 容器里算不出 min-height:0 的弹性子项高度，
+     显式给出 height 更可靠。 */
+  height: 100%; min-height: 0;
+}
+
+.content {
+  flex: 1 1 auto; display: flex; flex-direction: column;
+  min-width: 0; height: 100%; min-height: 0;
+}
+
+.list-head {
+  display: flex; padding: 5px 12px; border-bottom: 1px solid;
+  font-size: 12px; font-weight: 600;
+}
+.col-title { flex: 1 1 auto; min-width: 0; }
+.col-source { flex: 0 0 150px; }
+.col-time { flex: 0 0 118px; text-align: right; }
+.muted { font-weight: 400; }
+
+.list { flex: 1 1 auto; overflow-y: auto; }
+.list-empty, .list-more {
+  padding: 14px; text-align: center; font-size: 12px;
+}
+.list-more { display: none; padding: 8px; }
+
+.statusbar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 4px 10px; border-top: 1px solid;
+  font-size: 12px; flex: 0 0 auto;
+}
+
+/* ---------------- 文章行 ---------------- */
+.row-item {
+  display: flex; align-items: baseline;
+  padding: 6px 12px; cursor: default;
+  border-bottom: 1px solid transparent;
+}
+.row-item .star { flex: 0 0 16px; }
+/* 行内 3D Emoji 图标（星标等）：必须显式给尺寸，
+   256px 的原图不约束会撑破行高 */
+.row-item .star .star-ico { width: 14px; height: 14px; vertical-align: middle; }
+.meta-ico { width: 14px; height: 14px; vertical-align: -2px; margin-right: 3px; }
+.inline-ico { width: 14px; height: 14px; vertical-align: middle; }
+.row-item .rtitle {
+  flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.row-item .rsource {
+  flex: 0 0 150px; font-size: 12px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.row-item .rtime {
+  flex: 0 0 118px; text-align: right; font-size: 12px;
+}
+.row-item.unread .rtitle { font-weight: 600; }
+body.theme-light .row-item { border-bottom-color: #F0F0F0; }
+body.theme-dark .row-item { border-bottom-color: #2E2E2E; }
+
+/* ---------------- 侧栏节点 ---------------- */
+.node {
+  display: flex; align-items: center;
+  padding: 4px 10px; cursor: default; font-size: 13px;
+}
+.node .nicon { width: 16px; height: 16px; margin-right: 6px; flex: 0 0 16px; }
+.node .nlabel {
+  flex: 1 1 auto; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.node .badge {
+  flex: 0 0 auto; min-width: 18px; padding: 0 5px;
+  border-radius: 9px; font-size: 11px; text-align: center;
+  background: #D64545; color: #FFFFFF;
+}
+.node .badge.zero { display: none; }
+.node.group { font-weight: 600; font-size: 12px; margin-top: 6px; }
+.node.sub { padding-left: 26px; }
+.node .gear { display: none; flex: 0 0 auto; cursor: pointer; opacity: .6; }
+.node:hover .gear { display: inline-block; }
+/* 齿轮换成 3D Emoji 图片后要给定尺寸 */
+.node .gear { width: 14px; height: 14px; vertical-align: middle; }
+
+/* ---------------- 控件 ---------------- */
+.btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 9px; margin-right: 4px;
+  border: 1px solid; border-radius: 3px;
+  cursor: pointer; font-size: 13px; font-family: inherit;
+}
+.btn img { width: 15px; height: 15px; }
+.btn.primary { background: #0F6CBD; color: #FFFFFF; border-color: #0F6CBD; }
+body.theme-dark .btn.primary { background: #62B5F7; color: #0B2436; border-color: #62B5F7; }
+.btn.danger { color: #B4232C; }
+body.theme-dark .btn.danger { color: #FF8A80; }
+.btn.icon { padding: 4px 6px; margin-right: 2px; }
+.btn[disabled] { opacity: .5; cursor: default; }
+
+.views { display: inline-flex; margin: 0 8px; }
+.seg {
+  padding: 4px 10px; border: 1px solid; border-right-width: 0;
+  cursor: pointer; font-size: 13px; font-family: inherit;
+}
+.seg:last-child { border-right-width: 1px; }
+
+.search {
+  display: inline-flex; align-items: center;
+  border: 1px solid #C8C8C8; border-radius: 3px;
+  padding: 2px 6px; background: #FFFFFF;
+}
+body.theme-dark .search { border-color: #4A4A4A; background: #2B2B2B; }
+.search img { width: 14px; height: 14px; margin-right: 4px; }
+.search input {
+  border: 0; outline: 0; width: 190px; background: transparent;
+  color: inherit; font-family: inherit; font-size: 13px;
+}
+.clear-search {
+  border: 0; background: transparent; cursor: pointer;
+  font-size: 15px; line-height: 1; color: inherit; opacity: .6;
+}
+.clear-search img { width: 13px; height: 13px; vertical-align: middle; }
+
+.input, .input-area {
+  padding: 4px 7px; border-radius: 3px;
+  font-family: inherit; font-size: 13px;
+}
+.input { height: 27px; }
+.input.grow { flex: 1 1 auto; min-width: 0; }
+.input.short { width: 78px; }
+.input-area {
+  width: 100%; resize: vertical; min-height: 110px;
+  font-family: Consolas, "Courier New", monospace; line-height: 1.5;
+}
+.field-label { display: block; margin-bottom: 4px; font-size: 12px; }
+
+.linkbtn {
+  background: transparent; border: 0; cursor: pointer;
+  font-family: inherit; font-size: 13px; padding: 2px 4px;
+}
+
+.row { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+.mini { font-size: 12px; }
+.mini.w { flex: 0 0 88px; }
+.check { display: block; margin: 5px 0; font-size: 13px; }
+.check input { vertical-align: middle; margin-right: 5px; }
+.hint { font-size: 12px; }
+
+/* ---------------- 表格 ---------------- */
+.grid { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+.grid th, .grid td {
+  border: 1px solid; padding: 4px 6px; text-align: left;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.grid .c-check { width: 46px; text-align: center; }
+.grid .c-status { width: 74px; }
+.grid .c-count { width: 54px; text-align: right; }
+.grid td.c-check { text-align: center; }
+.ok { color: #0E7A3D; }
+body.theme-dark .ok { color: #6DD58C; }
+.bad { color: #B4232C; }
+body.theme-dark .bad { color: #FF8A80; }
+
+/* ---------------- 弹窗 ---------------- */
+.mask {
+  position: fixed; left: 0; top: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, .35);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 50;
+}
+.dialog {
+  border: 1px solid; border-radius: 5px;
+  width: 560px; max-width: 94%; max-height: 88%;
+  display: flex; flex-direction: column;
+}
+.dialog.wide { width: 760px; }
+.dlg-head {
+  display: flex; align-items: center; gap: 7px;
+  padding: 9px 12px; border-bottom: 1px solid;
+}
+.dlg-head img { width: 19px; height: 19px; }
+.dlg-head h3 { margin: 0; font-size: 14px; font-weight: 600; flex: 1 1 auto; }
+.dlg-head .x {
+  border: 0; background: transparent; cursor: pointer;
+  font-size: 17px; line-height: 1; color: inherit; opacity: .65;
+}
+.dlg-head .x img { width: 15px; height: 15px; vertical-align: middle; }
+.dlg-body { padding: 12px; overflow-y: auto; flex: 1 1 auto; }
+.dlg-foot {
+  display: flex; align-items: center; gap: 6px;
+  padding: 9px 12px; border-top: 1px solid;
+}
+
+.tabs { display: flex; gap: 4px; margin-bottom: 10px; }
+.tab {
+  padding: 4px 11px; border: 1px solid transparent; border-radius: 3px;
+  background: transparent; cursor: pointer;
+  font-family: inherit; font-size: 13px; color: inherit;
+}
+.page { min-height: 190px; }
+
+/* ---------------- 气泡 / 菜单 ---------------- */
+.toasts {
+  position: fixed; right: 14px; bottom: 34px; z-index: 90;
+  display: flex; flex-direction: column; gap: 7px;
+}
+.toast {
+  border: 1px solid; border-radius: 4px;
+  padding: 8px 11px; max-width: 330px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .18);
+}
+.toast .t-title { font-weight: 600; margin-bottom: 2px; }
+.toast .t-msg { font-size: 12px; word-break: break-all; }
+.toast.clickable { cursor: pointer; }
+
+.menu {
+  position: fixed; z-index: 95;
+  border: 1px solid; border-radius: 3px; padding: 3px 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .18); min-width: 158px;
+}
+.menu div { padding: 5px 13px; cursor: default; font-size: 13px; }
+.menu .sep { height: 1px; padding: 0; margin: 3px 0; background: #D8D8D8; }
+body.theme-dark .menu .sep { background: #4A4A4A; }
+
+/* ---------------- 进度条 ---------------- */
+.progress { display: inline-flex; align-items: center; gap: 6px; }
+.progress .bar {
+  display: inline-block; width: 110px; height: 5px;
+  background: #D0D0D0; border-radius: 3px; overflow: hidden;
+}
+body.theme-dark .progress .bar { background: #444444; }
+.progress .bar i {
+  display: block; height: 100%; width: 0;
+  background: #0F6CBD;
+}
+body.theme-dark .progress .bar i { background: #62B5F7; }
+
+/* 滚动条（WebKit / Edge） */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #B8B8B8; border-radius: 5px; }
+body.theme-dark ::-webkit-scrollbar-thumb { background: #555555; }
+::-webkit-scrollbar-track { background: transparent; }
+
+
+/* ============ IE11 降级（Win7 上 pywebview 会用 IE11 内核）============
+   IE11 的 flexbox 是 2013 年的实现，坑很多：
+     · flex 默认值是 0 0 auto（规范是 0 1 auto），子项不会自动收缩
+     · column 容器里带 min-height 的子项高度算不出来，会塌陷成一条线
+     · 完全不支持 gap（按钮会挤在一起或竖着排）
+     · 嵌套 flex 容器叠加后，内层滚动条经常出不来
+   所以这里不做修补，直接换回传统三段式：块级流 + 浮动 + 固定高度。
+   用 -ms-high-contrast 做条件判断，只有 IE10/11 认这条媒体查询。 */
+@media all and (-ms-high-contrast: none), (-ms-high-contrast: active) {
+
+  /* 1. 主框架：不再用 flex 拉伸，改普通块级流 */
+  .app { display: block; height: 100%; }
+
+  /* 1.5 gap 补偿：IE11 完全不支持 gap，元素会全部贴在一起。
+     这里给用到 gap 的容器补上等价的 margin。 */
+  .btn, .seg { margin-right: 4px; }
+  .r-bar .btn { margin-right: 5px; }
+  .r-title-row .btn { margin-right: 8px; }
+  .statusbar > * { margin-right: 10px; }
+
+  /* 2. 顶部工具栏：固定高度 + 浮动，不用 gap */
+  .toolbar {
+    display: block;
+    height: 41px;
+    padding: 0 10px;
+    overflow: hidden;
+    white-space: nowrap;
+    line-height: 39px;
+  }
+  .toolbar > * {
+    display: inline-block;
+    vertical-align: middle;
+    margin-top: 0;
+    margin-right: 4px;
+  }
+  /* 弹性占位符在块级布局里没意义，直接藏掉 */
+  .toolbar .spacer { display: none; }
+  /* 右侧一组按钮靠右浮动 */
+  .toolbar #btn-theme,
+  .toolbar #btn-settings,
+  .toolbar #btn-notify {
+    float: right;
+    margin-right: 0;
+    margin-left: 6px;
+  }
+  .toolbar .views,
+  .toolbar .search { display: inline-block; }
+
+  /* 3. 主体：侧边栏左浮动，内容区用 margin 让位 */
+  .main {
+    display: block;
+    height: calc(100% - 67px);   /* 顶栏 41 + 状态栏 26（实测值）*/
+    overflow: hidden;
+  }
+  .sidebar {
+    display: block;
+    float: left;
+    width: 232px;
+    height: 100%;
+    overflow: hidden;
+  }
+  .content {
+    display: block;
+    margin-left: 232px;          /* 给侧边栏留位置 */
+    height: 100%;
+    overflow: hidden;
+  }
+
+  /* 4. 两个视图：自己出滚动条 */
+  .view { display: block; height: 100%; overflow: hidden; }
+  .list { height: calc(100% - 30px); overflow-y: auto; }
+  .list-head { display: block; height: 30px; line-height: 30px; }
+  .list-empty { display: block; padding: 30px; text-align: center; }
+  .list-more { display: block; padding: 8px; text-align: center; }
+
+  /* 阅读页：头部固定，正文自己滚 */
+  .r-head { display: block; }
+  .r-title-row { display: block; }
+  .r-title { display: inline-block; width: auto; }
+  .r-bar { display: block; margin-top: 8px; }
+  .r-bar > * { display: inline-block; margin-right: 4px; }
+  .r-bar .spacer { display: none; }
+  .r-meta { display: block; }
+  .r-body { height: calc(100% - 130px); overflow-y: auto; }
+  .r-images { display: block; }
+
+  /* 5. 底部状态栏：固定高度 + 浮动 */
+  .statusbar {
+    display: block;
+    height: 26px;
+    padding: 0 10px;
+    clear: both;
+    overflow: hidden;
+    white-space: nowrap;
+    line-height: 26px;
+  }
+  .statusbar > * { float: left; margin-right: 10px; }
+  .statusbar .spacer { display: none; }
+  .statusbar #stats { float: right; margin-right: 0; }
+
+  /* 5.5 按钮：内部是 flex（图标 + 文字），IE11 下会压扁或竖排。
+      退回 inline-block，用 line-height 保证图标和文字在同一行。 */
+  .btn {
+    display: inline-block;
+    height: 28px;
+    line-height: 26px;
+    padding: 0 8px;
+    white-space: nowrap;
+  }
+  .btn > img,
+  .btn > span { display: inline-block; vertical-align: middle; }
+  .btn > img { margin-right: 4px; }
+  .btn.icon { padding: 0 6px; }
+  .views .seg {
+    display: inline-block;
+    height: 24px;
+    line-height: 22px;
+    padding: 0 10px;
+    white-space: nowrap;
+  }
+  .search { display: inline-block; }
+  .search > * { display: inline-block; vertical-align: middle; }
+  .search input { height: 24px; line-height: 22px; }
+
+  /* 6. 行内元素：IE11 里 flex 行会被压扁，退回表格式布局 */
+  .row-item { display: block; height: 28px; line-height: 28px; }
+  .row-item > span { display: inline-block; vertical-align: middle; }
+  .node { display: block; height: 26px; line-height: 26px; }
+  .node > span,
+  .node > img { display: inline-block; vertical-align: middle; }
+
+  /* 7. 弹窗：flex 居中在 IE11 里算不准，用绝对定位居中 */
+  .mask { display: block; text-align: center; }
+  .mask .dialog {
+    display: inline-block;
+    text-align: left;
+    vertical-align: middle;
+  }
+  .dialog { position: relative; }
+}
