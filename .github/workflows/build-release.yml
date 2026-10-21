@@ -333,13 +333,17 @@ jobs:
             throw "VIProductVersion 写入后格式仍不对：$actual"
           }
 
+          # 校验 !define 那一行，而不是 OutFile 那一行：
+          # OutFile 里写的是 ${APP_VERSION} 宏引用，原文不含版本号，
+          # 拿它比对必然失败（真正的版本号来自上面替换掉的 !define）。
+          $def = (Select-String -Path $path -Pattern '!define APP_VERSION ').Line.Trim()
+          Write-Host "版本定义：$def"
+          if ($def -notmatch [regex]::Escape($ver)) {
+            throw "!define APP_VERSION 未写入真实版本号（期望含 $ver）：$def"
+          }
+
           $out = (Select-String -Path $path -Pattern '^OutFile').Line.Trim()
           Write-Host "输出文件：$out"
-          if ($out -notmatch [regex]::Escape($ver)) {
-            throw "OutFile 里没有真实版本号（期望含 $ver）：$out"
-          }
-          $def = (Select-String -Path $path -Pattern '!define APP_VERSION').Line.Trim()
-          Write-Host "版本定义：$def"
 
       - name: Build installer with NSIS
         shell: pwsh
