@@ -296,13 +296,41 @@ jobs:
           if ($langLine -lt $lastPage) { throw "MUI_LANGUAGE（第 $($langLine+1) 行）必须排在所有 MUI_PAGE_*（最后在第 $($lastPage+1) 行）之后" }
           Write-Host "结构检查通过：MUI_LANGUAGE 在第 $($langLine+1) 行，最后一个页面宏在第 $($lastPage+1) 行"
 
+      - name: Stamp installer version into installer.nsi
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dot = $env:APP_VERSION_DOT
+          if (-not $dot) { throw "APP_VERSION_DOT 为空，无法写入安装器版本号" }
+          if ($dot -notmatch '^\d+\.\d+\.\d+\.\d+$') { throw "版本号不是四段数字：$dot" }
+
+          # 直接把四段版本号写进 nsi 的字面量，不依赖 makensis 的 /D 传参。
+          # 原因：/D 传空值时 NSIS 仍认为符号"已定义"，展开成空串，
+          # 而 !ifndef 不会兜底 —— 报的正是 VIProductVersion 格式错误。
+          $utf8bom = New-Object System.Text.UTF8Encoding($true)
+          $path = 'installer.nsi'
+          $text = [System.IO.File]::ReadAllText($path, $utf8bom)
+
+          $text = [regex]::Replace($text, 'VIProductVersion\s+"[^"]*"', "VIProductVersion \"$dot\"")
+          $text = [regex]::Replace($text, "('FileVersion',\s*)'[^']*'", "`$1'$dot'")
+          $text = [regex]::Replace($text, "('ProductVersion',\s*)'[^']*'", "`$1'$dot'")
+
+          [System.IO.File]::WriteAllText($path, $text, $utf8bom)
+
+          # 回读校验：把实际生效的那一行打出来，方便一眼看出 makensis 拿到了什么
+          $actual = (Select-String -Path $path -Pattern 'VIProductVersion').Line.Trim()
+          Write-Host "写入后：$actual"
+          if ($actual -notmatch 'VIProductVersion\s+"\d+\.\d+\.\d+\.\d+"') {
+            throw "VIProductVersion 写入后格式仍不对：$actual"
+          }
+
       - name: Build installer with NSIS
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $makensis = $env:MAKENSIS
           if (-not $makensis -or -not (Test-Path $makensis)) { throw "makensis 路径无效：$makensis" }
-          & $makensis /V2 /INPUTCHARSET UTF8 /DAPP_VERSION=$env:APP_VERSION installer.nsi
+          & $makensis /V2 /INPUTCHARSET UTF8 installer.nsi
           if ($LASTEXITCODE -ne 0) { throw "makensis 编译失败（退出码 $LASTEXITCODE）" }
           $setup = "dist/$env:APP_NAME-Setup-$env:APP_VERSION.exe"
           if (-not (Test-Path $setup)) { throw "安装器未生成：$setup" }

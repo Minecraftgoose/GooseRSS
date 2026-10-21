@@ -5,6 +5,11 @@
   !define APP_VERSION "1.0.0"
 !endif
 
+!ifndef APP_VERSION_QUAD
+  !define APP_VERSION_QUAD "1.0.0.0"
+!endif
+
+
 !define APP_NAME      "GooseRSS"
 !define APP_DISPLAY   "GooseRSS 阅读器"
 !define PUBLISHER     "Minecraftgoose"
@@ -21,12 +26,12 @@ SetCompressor /SOLID lzma
 SetCompressorDictSize 32
 XPStyle on
 
-VIProductVersion "${APP_VERSION}.0"
+VIProductVersion "1.0.0.0"
 VIAddVersionKey "ProductName"     "${APP_DISPLAY}"
 VIAddVersionKey "CompanyName"     "${PUBLISHER}"
 VIAddVersionKey "FileDescription" "${APP_DISPLAY} 安装程序"
-VIAddVersionKey "FileVersion"     "${APP_VERSION}"
-VIAddVersionKey "ProductVersion"  "${APP_VERSION}"
+VIAddVersionKey "FileVersion"     "1.0.0.0"
+VIAddVersionKey "ProductVersion"  "1.0.0.0"
 VIAddVersionKey "LegalCopyright"  "Copyright 2026 ${PUBLISHER}"
 
 !define MUI_ABORTWARNING
