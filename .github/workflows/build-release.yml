@@ -311,9 +311,12 @@ jobs:
           $path = 'installer.nsi'
           $text = [System.IO.File]::ReadAllText($path, $utf8bom)
 
-          $text = [regex]::Replace($text, 'VIProductVersion\s+"[^"]*"', "VIProductVersion \"$dot\"")
-          $text = [regex]::Replace($text, "('FileVersion',\s*)'[^']*'", "`$1'$dot'")
-          $text = [regex]::Replace($text, "('ProductVersion',\s*)'[^']*'", "`$1'$dot'")
+          $vip   = 'VIProductVersion "' + $dot + '"'
+          $fver  = "`$1'" + $dot + "'"
+          $pver  = "`$1'" + $dot + "'"
+          $text = [regex]::Replace($text, 'VIProductVersion\s+"[^"]*"', $vip)
+          $text = [regex]::Replace($text, "('FileVersion',\s*)'[^']*'", $fver)
+          $text = [regex]::Replace($text, "('ProductVersion',\s*)'[^']*'", $pver)
 
           [System.IO.File]::WriteAllText($path, $text, $utf8bom)
 
