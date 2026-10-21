@@ -15,6 +15,7 @@
 
 import json
 import os
+import sys
 import socket
 import threading
 
@@ -27,8 +28,27 @@ except ImportError:      # Python < 3.7
 
 from . import config
 
-WEB_DIR = os.path.join(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__))), "web")
+def _find_web_dir():
+    """定位 web/ 目录。
+
+    打包后 src/ 被塞进 _MEIPASS，而 web/ 是作为数据文件另放的，
+    直接按 __file__ 往上两级会指向 _MEIPASS 内部（那里没有 web/），
+    界面就会白屏。所以必须和 config.assets_dir 一样先看 _MEIPASS。
+    """
+    if getattr(sys, "frozen", False):
+        internal = os.path.join(getattr(sys, "_MEIPASS",
+                                        os.path.dirname(sys.executable)),
+                                "web")
+        if os.path.isdir(internal):
+            return internal
+        near_exe = os.path.join(os.path.dirname(sys.executable), "web")
+        if os.path.isdir(near_exe):
+            return near_exe
+    return os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "web")
+
+
+WEB_DIR = _find_web_dir()
 
 MIME = {
     ".html": "text/html; charset=utf-8",

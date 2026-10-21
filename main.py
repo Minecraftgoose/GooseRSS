@@ -148,10 +148,8 @@ def _warn_optional():
         __import__("PIL")
     except Exception:
         tips.append("Pillow（托盘图标与角标；不装则无托盘图标）")
-    try:
-        __import__("winotify")
-    except Exception:
-        tips.append("winotify（Win10/11 系统通知；不装则退回托盘气球或页面气泡）")
+    # winotify 不再列入提示：通知默认走 pystray 气球（Win7 起全版本通用），
+    # Toast 只是可选项，不装不影响通知功能
     if tips:
         print("可选依赖未安装（功能会降级，不影响启动）：")
         for item in tips:

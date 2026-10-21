@@ -231,13 +231,14 @@
         <div class="row"><label class="mini w">一次最多</label>
           <input type="number" id="s-max-total" class="input short"></div>
         <label class="check"><input type="checkbox" id="s-sound"> 提示音</label>
-        <label class="check"><input type="checkbox" id="s-system"> 使用系统通知（Win10/11 推荐）</label>
+        <label class="check"><input type="checkbox" id="s-system"> 使用系统通知</label>
+        <div class="row"><label class="check"><input type="checkbox" id="s-toast"> 优先使用 Toast</label></div>
+        <div class="hint" id="notify-backends"></div>
         <div class="row"><label class="mini w">免打扰时段</label>
           <input type="text" id="s-quiet" class="input" placeholder="如 23:00-07:30"></div>
         <div class="row">
           <button class="btn" id="btn-test-notify">
             <img src="icons/bell.png" alt=""><span>发一条测试通知</span></button>
-          <span class="hint" id="notify-backends"></span>
         </div>
       </div>
 

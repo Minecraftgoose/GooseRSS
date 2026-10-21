@@ -1,0 +1,337 @@
+name: Build & Release (Windows 7)
+
+permissions:
+  contents: write
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        required: true
+        type: string
+
+env:
+  APP_NAME: "GooseRSS"
+  TAG_REF: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  build:
+    name: Build Windows 7 x64 Installer (NSIS)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Resolve version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = $env:TAG_REF
+          if (-not $tag) { throw 'TAG_REF 为空：release 事件应有 ref_name，手动触发需填 tag' }
+          Write-Host "原始 tag：$tag"
+
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            git ls-remote --exit-code --tags origin "refs/tags/$tag" | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "tag 不存在于远端：$tag" }
+          }
+
+          $ver  = $tag -replace '^[vV]', ''
+          $core = [regex]::Match($ver, '^\d+(?:\.\d+)*').Value
+          $nums = if ($core) { $core.Split('.') } else { @('0') }
+
+          $quad = @($nums + @('0','0','0','0'))[0..3] -join ', '
+          $dot  = @($nums + @('0','0','0','0'))[0..3] -join '.'
+
+          Write-Host "解析版本：$ver（文件版本四段：$dot）"
+          Add-Content -Path $env:GITHUB_ENV  -Value "APP_VERSION=$ver"
+          Add-Content -Path $env:GITHUB_ENV  -Value "APP_VERSION_QUAD=$quad"
+          Add-Content -Path $env:GITHUB_ENV  -Value "APP_VERSION_DOT=$dot"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "version=$ver"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "tag=$tag"
+
+      - name: Sync version_info.txt with tag
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $quad = $env:APP_VERSION_QUAD
+          $dot  = $env:APP_VERSION_DOT
+
+          $path = 'version_info.txt'
+          $utf8 = New-Object System.Text.UTF8Encoding($false)
+          $text = [System.IO.File]::ReadAllText($path, $utf8)
+
+          $text = [regex]::Replace($text, 'filevers=\([^)]*\)',   "filevers=($quad)")
+          $text = [regex]::Replace($text, 'prodvers=\([^)]*\)',   "prodvers=($quad)")
+          $text = [regex]::Replace($text, "('FileVersion',\s*)'[^']*'",    "`$1'$dot'")
+          $text = [regex]::Replace($text, "('ProductVersion',\s*)'[^']*'", "`$1'$dot'")
+
+          [System.IO.File]::WriteAllText($path, $text, $utf8)
+          Write-Host "version_info.txt 版本已同步为 $dot（$quad）"
+          Select-String -Path $path -Pattern 'filevers|prodvers|FileVersion|ProductVersion' |
+            ForEach-Object { Write-Host "  $($_.Line.Trim())" }
+
+      - name: Set up Python 3.8.10
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.8.10"
+
+      - name: Verify Python version
+        run: |
+          python -V
+          python -c "import sys; assert sys.version_info[:3] == (3, 8, 10), sys.version"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade "pip<25"
+          pip install -r requirements.txt
+          pip install -r requirements-build-win7.txt
+
+      - name: Install UPX 4.2.4
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = 'C:\tools\upx'
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+
+          Write-Host '下载 UPX 4.2.4 (win64)…'
+          $ok = $false
+          for ($i = 1; $i -le 3 -and -not $ok; $i++) {
+            try {
+              Invoke-WebRequest `
+                -Uri 'https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-win64.zip' `
+                -OutFile 'upx.zip' -UserAgent 'Mozilla/5.0' -UseBasicParsing -TimeoutSec 120
+              $ok = $true
+            } catch {
+              Write-Host "第 $i 次下载失败：$($_.Exception.Message)"
+              Start-Sleep -Seconds 5
+            }
+          }
+          if (-not $ok) { throw 'UPX 下载连续 3 次失败' }
+          Expand-Archive -Path 'upx.zip' -DestinationPath $root -Force
+
+          $upx = Get-ChildItem -Path $root -Filter 'upx.exe' -Recurse | Select-Object -First 1
+          if (-not $upx) { throw '未找到 upx.exe' }
+
+          Add-Content -Path $env:GITHUB_PATH -Value $upx.DirectoryName
+          Add-Content -Path $env:GITHUB_ENV -Value "UPX_DIR=$($upx.DirectoryName)"
+
+          $ver = (& $upx.FullName --version) -join ' '
+          if ($ver -notmatch '4\.2\.4') { throw "UPX 版本不是 4.2.4（实际：$ver）" }
+          Write-Host "UPX ready：$($upx.FullName) [$ver]"
+
+      - name: Build app with PyInstaller (onedir / 文件夹模式)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          pyinstaller --noconfirm --upx-dir "$env:UPX_DIR" ./${{ env.APP_NAME }}.spec
+
+      - name: Verify onedir output
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = "dist/$env:APP_NAME"
+          $exe = Join-Path $dir "$env:APP_NAME.exe"
+          if (-not (Test-Path $exe)) {
+            Get-ChildItem dist -Recurse -Depth 1 -ErrorAction SilentlyContinue |
+              Select-Object -First 20 -ExpandProperty FullName
+            throw "PyInstaller 未生成 onedir 产物：$exe"
+          }
+          Write-Host "OK 入口：$exe"
+          Write-Host "目录文件数：$((Get-ChildItem $dir -Recurse -File).Count)"
+
+      - name: Verify bundled resources
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = "dist/$env:APP_NAME"
+          $need = @(
+            "$dir\web\index.html",
+            "$dir\web\app.js",
+            "$dir\web\app.css",
+            "$dir\web\icons\app.png",
+            "$dir\web\vendor\marked.min.js",
+            "$dir\web\vendor\mark.min.js",
+            "$dir\assets\app.ico",
+            "$dir\assets\icons\tray.png"
+          )
+          $missing = @()
+          foreach ($p in $need) {
+            if (Test-Path $p) { Write-Host "  OK  $p" }
+            else { $missing += $p; Write-Host "  MISSING  $p" }
+          }
+          $iconCount = (Get-ChildItem "$dir\web\icons" -Filter *.png -ErrorAction SilentlyContinue).Count
+          Write-Host "web/icons 图标数：$iconCount"
+          if ($missing.Count) { throw ("产物缺少资源文件：" + ($missing -join ', ')) }
+
+      - name: Verify UPX compression
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = "dist/$env:APP_NAME"
+          $sig = [System.Text.Encoding]::ASCII.GetBytes('UPX!')
+          $packed = 0
+          $total  = 0
+          foreach ($f in (Get-ChildItem $dir -Recurse -File | Where-Object { $_.Extension -in '.exe', '.dll', '.pyd' })) {
+            $total++
+            $buf = New-Object byte[] 4096
+            $fs = [System.IO.File]::OpenRead($f.FullName)
+            try { $n = $fs.Read($buf, 0, 4096) } finally { $fs.Close() }
+            if ($n -lt 4) { continue }
+            for ($i = 0; $i -le $n - 4; $i++) {
+              if ($buf[$i] -eq $sig[0] -and $buf[$i+1] -eq $sig[1] -and $buf[$i+2] -eq $sig[2] -and $buf[$i+3] -eq $sig[3]) {
+                $packed++; break
+              }
+            }
+          }
+          Write-Host "UPX 已压缩：$packed / $total（exe+dll+pyd）"
+          if ($packed -eq 0) {
+            Write-Host "::warning::没有文件被 UPX 压缩，检查 --upx-dir 是否指向 upx.exe 所在目录"
+          }
+
+      - name: Set up NSIS
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $minVer = [version]'3.9.0'
+
+          function Find-Makensis {
+            foreach ($c in @(
+              'C:\Program Files (x86)\NSIS\makensis.exe',
+              'C:\Program Files\NSIS\makensis.exe'
+            )) {
+              if (Test-Path $c) { return $c }
+            }
+            return $null
+          }
+          function Get-MakensisVersion([string]$path) {
+            if (-not $path) { return '' }
+            try {
+              $raw = ((& $path /VERSION 2>&1) -join ' ').Trim()
+              if ($raw -match '(\d+(?:\.\d+){1,3})') {
+                $n = $Matches[1]
+                while (($n.Split('.')).Count -lt 3) { $n += '.0' }
+                return [version]$n
+              }
+            } catch {}
+            return $null
+          }
+
+          $makensis = Find-Makensis
+          $ver = Get-MakensisVersion $makensis
+          Write-Host "探测结果：$makensis  版本：$ver"
+
+          if ($makensis -and $ver -and $ver -ge $minVer) {
+            Write-Host "复用镜像自带 NSIS $ver，跳过安装（零下载）"
+          } else {
+            Write-Host "镜像无可用 NSIS，改用 Chocolatey 安装（硬超时 6 分钟）…"
+            $job = Start-Job -ScriptBlock { & choco install nsis --version=3.09 -y --force 2>&1 }
+            Wait-Job $job -Timeout 360 | Out-Null
+            if ($job.State -ne 'Completed') {
+              Receive-Job $job -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+              Stop-Job $job -Force
+              Remove-Job $job -Force
+              throw 'Chocolatey 安装 NSIS 超过 6 分钟未完成，已中止（多为 CDN 抽风，重跑即可）'
+            }
+            Receive-Job $job | ForEach-Object { Write-Host $_ }
+            Remove-Job $job -Force
+
+            $makensis = Find-Makensis
+            $ver = Get-MakensisVersion $makensis
+          }
+
+          if (-not $makensis) { throw '未找到 makensis.exe' }
+          if (-not $ver -or $ver -lt $minVer) { throw "NSIS 版本低于 3.09（实际：$ver）" }
+
+          Add-Content -Path $env:GITHUB_PATH -Value (Split-Path $makensis -Parent)
+          Add-Content -Path $env:GITHUB_ENV  -Value "MAKENSIS=$makensis"
+          Write-Host "NSIS ready：$makensis [$ver]"
+
+      - name: Verify script encoding (UTF-8 BOM)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bytes = [System.IO.File]::ReadAllBytes('installer.nsi')
+          if (-not ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)) {
+            throw 'installer.nsi 缺少 UTF-8 BOM（EF BB BF），编译出的界面中文会乱码'
+          }
+          Write-Host 'installer.nsi 编码检查通过：UTF-8 with BOM'
+
+          $utf8bom = New-Object System.Text.UTF8Encoding($true)
+          [System.IO.File]::WriteAllText('LICENSE.utf8bom.txt', [System.IO.File]::ReadAllText('LICENSE'), $utf8bom)
+          Write-Host '已生成 LICENSE.utf8bom.txt（供许可证页）'
+
+      - name: Verify NSIS script structure
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $bmpMatch = Select-String -Path 'installer.nsi' -Pattern 'MUI_WELCOMEFINISHPAGE_BITMAP\s+"([^"]+)"'
+          if ($bmpMatch) {
+            $bmpRel = $bmpMatch.Matches[0].Groups[1].Value
+            $bmp = $bmpRel -replace '/', '\'
+            if (-not (Test-Path $bmp)) { throw "欢迎页位图缺失：$bmp" }
+            $bytes = [System.IO.File]::ReadAllBytes($bmp)
+            if (-not ($bytes.Length -gt 2 -and $bytes[0] -eq 0x42 -and $bytes[1] -eq 0x4D)) {
+              throw "欢迎页位图不是 BMP（NSIS 不支持 PNG）：$bmp"
+            }
+            Write-Host "欢迎页位图：$bmp（$($bytes.Length) 字节）"
+          } else {
+            Write-Host '未定义欢迎页位图，使用 MUI 默认图（跳过位图校验）'
+          }
+
+          $lines = Get-Content 'installer.nsi' -Encoding UTF8
+          $lastPage = -1
+          $langLine = -1
+          for ($i = 0; $i -lt $lines.Count; $i++) {
+            $code = ($lines[$i] -split '[;#]')[0].Trim()
+            if (-not $code.StartsWith('!insertmacro')) { continue }
+            if ($code -match 'MUI_(UN)?PAGE_\w+') { $lastPage = $i }
+            elseif ($code -match 'MUI_LANGUAGE')  { $langLine = $i; break }
+          }
+          if ($langLine -lt 0) { throw '找不到 MUI_LANGUAGE 指令' }
+          if ($langLine -lt $lastPage) { throw "MUI_LANGUAGE（第 $($langLine+1) 行）必须排在所有 MUI_PAGE_*（最后在第 $($lastPage+1) 行）之后" }
+          Write-Host "结构检查通过：MUI_LANGUAGE 在第 $($langLine+1) 行，最后一个页面宏在第 $($lastPage+1) 行"
+
+      - name: Build installer with NSIS
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $makensis = $env:MAKENSIS
+          if (-not $makensis -or -not (Test-Path $makensis)) { throw "makensis 路径无效：$makensis" }
+          & $makensis /V2 /INPUTCHARSET UTF8 /DAPP_VERSION=$env:APP_VERSION installer.nsi
+          if ($LASTEXITCODE -ne 0) { throw "makensis 编译失败（退出码 $LASTEXITCODE）" }
+          $setup = "dist/$env:APP_NAME-Setup-$env:APP_VERSION.exe"
+          if (-not (Test-Path $setup)) { throw "安装器未生成：$setup" }
+          Write-Host "安装器：$(Get-Item $setup | Select-Object -ExpandProperty Length) 字节"
+
+      - name: Package portable folder (zip)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $name = $env:APP_NAME
+          $ver  = $env:APP_VERSION
+          Compress-Archive -Path "dist/$name" -DestinationPath "dist/$name-$ver-portable.zip" -Force
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-${{ steps.version.outputs.version }}-win7
+          path: |
+            dist/${{ env.APP_NAME }}-Setup-${{ steps.version.outputs.version }}.exe
+            dist/${{ env.APP_NAME }}-${{ steps.version.outputs.version }}-portable.zip
+          overwrite: true
+          if-no-files-found: error
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/${{ env.APP_NAME }}-Setup-${{ steps.version.outputs.version }}.exe
+            dist/${{ env.APP_NAME }}-${{ steps.version.outputs.version }}-portable.zip
+          tag_name: ${{ steps.version.outputs.tag }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

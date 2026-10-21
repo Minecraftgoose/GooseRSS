@@ -1,25 +1,8 @@
-# GooseRSS —— 依赖清单
-#
-# 核心依赖（缺了无法启动）：
-feedparser>=6.0.0            # RSS / Atom / RDF / JSON Feed 解析
-requests>=2.25.0             # HTTP 请求（缺失时自动退回 urllib）
-pywebview>=4.0               # 界面窗口（要求 >=3.5：3.5 修好了内部
-                             # 图标处理逻辑，才和 pystray 兼容）。Win10/11 用 Edge WebView2；
-                             # Win7 上若装有 WebView2 Runtime（109 是
-                             # Win7 的最后一个版本）同样可用。
-                             # 后端通信走本地 HTTP 服务，不依赖 js_api
-                             # 注入，因此版本不必锁死。
-pythonnet>=3.0               # Windows 上 pywebview 的 WinForms 后端需要它
-                             # （Win7 还需 .NET Framework 4.6.2+）
+feedparser>=6.0.0,<7.0.0
+requests>=2.25.0,<2.32.0
+urllib3<2.0.0
+pywebview>=4.0,<6.0
+pythonnet>=3.0.0,<3.1.0
 
-# 可选依赖（缺了功能降级，不影响启动）：
-Pillow>=8.0.0                # 托盘图标与未读角标
-pystray>=0.19.0              # 系统托盘常驻
-winotify>=1.1.0              # Win10/11 系统通知（操作中心可点击）
-                             # Win7 用不了，会自动退回托盘气球或页面气泡
-
-# 说明：
-#   · 曾用 ttkthemes 做 Tk 界面主题，转到 pywebview 后已不需要
-#   · 注意 PyPI 包名是 pywebview，不是仓库名 py-web-view
-#   · Windows 上 pywebview 需要 Edge WebView2 Runtime：
-#       Win11 / Win10 新版自带；Win7 会用系统自带的 IE11 内核
+Pillow>=8.0.0,<11.0.0
+pystray>=0.19.0

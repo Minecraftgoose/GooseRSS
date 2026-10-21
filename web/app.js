@@ -1067,6 +1067,7 @@
     $('s-max-total').value = s.notify_max_total || 8;
     $('s-sound').checked = s.notify_sound !== false;
     $('s-system').checked = s.notify_system !== false;
+    $('s-toast').checked = !!s.notify_prefer_toast;
     $('s-quiet').value = s.notify_silent_hours || '';
     $('s-interval').value = s.auto_refresh_interval_min || 5;
     $('s-timeout').value = s.refresh_timeout || 15;
@@ -1112,6 +1113,7 @@
       notify_max_total: parseInt($('s-max-total').value, 10) || 8,
       notify_sound: $('s-sound').checked,
       notify_system: $('s-system').checked,
+      notify_prefer_toast: $('s-toast').checked,
       notify_silent_hours: $('s-quiet').value,
       auto_refresh_interval_min: parseInt($('s-interval').value, 10) || 5,
       refresh_timeout: parseInt($('s-timeout').value, 10) || 15,
@@ -1313,9 +1315,19 @@
     $('btn-settings').onclick = openSettings;
     $('btn-set-ok').onclick = saveSettings;
     $('btn-test-notify').onclick = function () {
+      var backendNames = {
+        balloon: '托盘气球',
+        toast: '系统 Toast',
+        bubble: '页面气泡'
+      };
       call('test_notification', []).then(function (r) {
-        $('set-status').textContent = r && r.backend ?
-          ('已通过 ' + r.backend + ' 发出') : ('发送失败：' + ((r && r.error) || '未知'));
+        if (r && r.backend) {
+          $('set-status').textContent = '已通过 ' +
+            (backendNames[r.backend] || r.backend) + ' 发出';
+        } else {
+          $('set-status').textContent = '发送失败：' +
+            ((r && r.error) || '未知，可能是通知被免打扰或托盘不可用');
+        }
       });
     };
     $('btn-export').onclick = function () {

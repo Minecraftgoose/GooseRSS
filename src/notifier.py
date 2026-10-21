@@ -4,13 +4,20 @@
 Windows 上「全版本通用」的通知接口其实有两套，能力不一样：
 
     接口                              Win7   Win8   Win10/11
-    Shell_NotifyIcon + NIF_INFO 气球   ✅     ✅     ✅（默认被抑制）
-    Toast 通知                         ❌     ✅     ✅（推荐）
+    Shell_NotifyIcon + NIF_INFO 气球   ✅     ✅     ✅
+    Toast 通知                         ❌     ✅     ✅
 
-所以要分层：
-    1. Win10/11 优先用 Toast —— 现代、进操作中心、可点击直接开原文
-    2. Win7 或 Toast 不可用 —— 降级 Shell_NotifyIcon 气球（pystray 内部就是它）
-    3. 都没有 —— 自绘 Tk 气泡兜底（也是 Linux / macOS 的路径）
+默认顺序是 **气球优先**，这不是随意排的：
+
+  · 气球走 Shell_NotifyIcon，Win7 起全版本通用，且由托盘图标直接发出，
+    不需要任何额外注册 —— 实测最稳。
+  · Toast（winotify）看起来更现代，但它要求应用已注册 AUMID；
+    Python 脚本通常没有，此时 `toast.show()` **不抛异常也不弹通知**，
+    调用方无从判断失败，于是永远不会降级到气球 —— 用户看到的就是
+    "通知完全没反应"。
+
+所以把 Toast 降级为可选（设置项 `notify_prefer_toast`，默认关），
+想用的自己打开，出问题也知道去哪儿找。
 
 所有后端都包在 try/except 里：任何一个失败都自动往下一层降，不会因为通知
 功能把主程序拖垮。
@@ -60,13 +67,21 @@ def _has_winotify():
         return False
 
 
-def available_backends():
-    """返回当前环境可用的通知后端，按优先级排序。"""
+def available_backends(prefer_toast=False):
+    """返回当前环境可用的通知后端，按优先级排序。
+
+    默认气球优先（Win7 起全版本通用、实测最稳）。
+    prefer_toast=True 时才把 Toast 排到前面 —— 但注意 Toast 失败是静默的，
+    排在前面就意味着它可能"吞掉"后续所有降级路径。
+    """
     backends = []
     if IS_WINDOWS:
-        if _has_winotify():
+        if prefer_toast and _has_winotify():
             backends.append("toast")
         backends.append("balloon")
+        # Toast 可用但没排前面时，仍作为气球之后的第二选择
+        if not prefer_toast and _has_winotify():
+            backends.append("toast")
     backends.append("bubble")
     return backends
 
@@ -74,9 +89,9 @@ def available_backends():
 def describe_backends():
     """给设置界面 / 自检脚本用的中文说明。"""
     names = {
-        "toast": "系统 Toast 通知（Win10/11，可点击、进操作中心）",
-        "balloon": "托盘气球通知（Shell_NotifyIcon，Win7 及以上通用）",
-        "bubble": "自绘气泡（无系统通知时的兜底）",
+        "toast": "系统 Toast",
+        "balloon": "托盘气球",
+        "bubble": "页面气泡",
     }
     return [(key, names[key]) for key in available_backends()]
 
@@ -190,7 +205,8 @@ class Notifier(object):
 
         backends = []
         if self.settings.get("notify_system", True):
-            backends.extend(available_backends())
+            prefer_toast = bool(self.settings.get("notify_prefer_toast", False))
+            backends.extend(available_backends(prefer_toast=prefer_toast))
         elif "bubble" not in backends:
             backends.append("bubble")
 
