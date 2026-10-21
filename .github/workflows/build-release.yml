@@ -311,21 +311,35 @@ jobs:
           $path = 'installer.nsi'
           $text = [System.IO.File]::ReadAllText($path, $utf8bom)
 
-          $vip   = 'VIProductVersion "' + $dot + '"'
-          $fver  = "`$1'" + $dot + "'"
-          $pver  = "`$1'" + $dot + "'"
+          $ver = $env:APP_VERSION
+          if (-not $ver) { throw "APP_VERSION 为空，无法写入安装器文件名" }
+
+          $vip    = 'VIProductVersion "' + $dot + '"'
+          $fver   = "`$1'" + $dot + "'"
+          $pver   = "`$1'" + $dot + "'"
+          $defver = '!define APP_VERSION "' + $ver + '"'
+
           $text = [regex]::Replace($text, 'VIProductVersion\s+"[^"]*"', $vip)
           $text = [regex]::Replace($text, "('FileVersion',\s*)'[^']*'", $fver)
           $text = [regex]::Replace($text, "('ProductVersion',\s*)'[^']*'", $pver)
+          $text = [regex]::Replace($text, '!define APP_VERSION\s+"[^"]*"', $defver)
 
           [System.IO.File]::WriteAllText($path, $text, $utf8bom)
 
-          # 回读校验：把实际生效的那一行打出来，方便一眼看出 makensis 拿到了什么
+          # 回读校验：把实际生效的那两行打出来，方便一眼看出 makensis 拿到了什么
           $actual = (Select-String -Path $path -Pattern 'VIProductVersion').Line.Trim()
           Write-Host "写入后：$actual"
           if ($actual -notmatch 'VIProductVersion\s+"\d+\.\d+\.\d+\.\d+"') {
             throw "VIProductVersion 写入后格式仍不对：$actual"
           }
+
+          $out = (Select-String -Path $path -Pattern '^OutFile').Line.Trim()
+          Write-Host "输出文件：$out"
+          if ($out -notmatch [regex]::Escape($ver)) {
+            throw "OutFile 里没有真实版本号（期望含 $ver）：$out"
+          }
+          $def = (Select-String -Path $path -Pattern '!define APP_VERSION').Line.Trim()
+          Write-Host "版本定义：$def"
 
       - name: Build installer with NSIS
         shell: pwsh
@@ -335,8 +349,15 @@ jobs:
           if (-not $makensis -or -not (Test-Path $makensis)) { throw "makensis 路径无效：$makensis" }
           & $makensis /V2 /INPUTCHARSET UTF8 installer.nsi
           if ($LASTEXITCODE -ne 0) { throw "makensis 编译失败（退出码 $LASTEXITCODE）" }
+
           $setup = "dist/$env:APP_NAME-Setup-$env:APP_VERSION.exe"
-          if (-not (Test-Path $setup)) { throw "安装器未生成：$setup" }
+          if (-not (Test-Path $setup)) {
+            Write-Host "期望路径不存在：$setup"
+            Write-Host "dist 下实际生成的 Setup 文件："
+            Get-ChildItem dist -Filter '*Setup*' -ErrorAction SilentlyContinue |
+              ForEach-Object { Write-Host "  $($_.Name)" }
+            throw "安装器未生成：$setup"
+          }
           Write-Host "安装器：$(Get-Item $setup | Select-Object -ExpandProperty Length) 字节"
 
       - name: Package portable folder (zip)
