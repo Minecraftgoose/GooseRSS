@@ -148,24 +148,39 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $dir = "dist/$env:APP_NAME"
+          # PyInstaller 6.x 的 onedir 布局把依赖与数据都放进 _internal/，
+          # exe 留在顶层；5.x 则是平铺在顶层。两种布局都要能校验。
+          $internal = Join-Path $dir '_internal'
+          if (Test-Path $internal) {
+            $root = $internal
+            Write-Host "检测到 6.x 布局，资源根目录：$root"
+          } else {
+            $root = $dir
+            Write-Host "检测到 5.x 布局，资源根目录：$root"
+          }
           $need = @(
-            "$dir\web\index.html",
-            "$dir\web\app.js",
-            "$dir\web\app.css",
-            "$dir\web\icons\app.png",
-            "$dir\web\vendor\marked.min.js",
-            "$dir\web\vendor\mark.min.js",
-            "$dir\assets\app.ico",
-            "$dir\assets\icons\tray.png"
+            "$root\web\index.html",
+            "$root\web\app.js",
+            "$root\web\app.css",
+            "$root\web\icons\app.png",
+            "$root\web\vendor\marked.min.js",
+            "$root\web\vendor\mark.min.js",
+            "$root\assets\app.ico",
+            "$root\assets\icons\tray.png"
           )
           $missing = @()
           foreach ($p in $need) {
             if (Test-Path $p) { Write-Host "  OK  $p" }
             else { $missing += $p; Write-Host "  MISSING  $p" }
           }
-          $iconCount = (Get-ChildItem "$dir\web\icons" -Filter *.png -ErrorAction SilentlyContinue).Count
+          $iconCount = (Get-ChildItem "$root\web\icons" -Filter *.png -ErrorAction SilentlyContinue).Count
           Write-Host "web/icons 图标数：$iconCount"
-          if ($missing.Count) { throw ("产物缺少资源文件：" + ($missing -join ', ')) }
+          if ($missing.Count) {
+            Write-Host "在产物中搜索 index.html 的实际位置："
+            Get-ChildItem (Join-Path $dir '_internal') -Recurse -Filter 'index.html' -ErrorAction SilentlyContinue |
+              ForEach-Object { Write-Host "  $($_.FullName)" }
+            throw ("产物缺少资源文件：" + ($missing -join ', '))
+          }
 
       - name: Verify UPX compression
         shell: pwsh
