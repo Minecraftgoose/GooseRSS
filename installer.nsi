@@ -1,117 +1,121 @@
-﻿!include "MUI2.nsh"
-!include "FileFunc.nsh"
+﻿﻿; ==============================================================================
+; GooseRSS 阅读器 — NSIS 安装脚本（3.09 及以上均可）
+; 打包对象：PyInstaller onedir（文件夹模式）产物 dist/GooseRSS/
+; 编译命令：makensis /V2 /INPUTCHARSET UTF8 /DAPP_VERSION=1.0.0 installer.nsi
+; 产物：    dist/GooseRSS-Setup-<version>.exe
+; 依赖：    NSIS 3.09+（Unicode），需 nsExec 插件（官方自带）
+;
+; 【编码】本文件必须保存为 UTF-8 **with BOM**（EF BB BF）。
+; makensis 对无 BOM 的脚本按系统 ANSI 代码页解析，中文会全部变成乱码；
+; 有 BOM 才按 UTF-8 解析。/INPUTCHARSET UTF8 是同一问题的第二道保险。
+; ==============================================================================
 
 !ifndef APP_VERSION
   !define APP_VERSION "1.0.0"
 !endif
 
-!ifndef APP_VERSION_QUAD
-  !define APP_VERSION_QUAD "1.0.0.0"
-!endif
+!define APP_NAME      "GooseRSS 阅读器"
+!define APP_PUBLISHER "Minecraftgoose"
+!define APP_DIR_NAME  "GooseRSS"
+!define APP_EXE       "GooseRSS.exe"
+!define APP_URL       "https://github.com/Minecraftgoose/GooseRSS"
+!define UNINST_KEY    "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_DIR_NAME}"
+!define OUT_NAME      "GooseRSS-Setup-${APP_VERSION}.exe"
 
+Unicode True
+!include "MUI2.nsh"
+!include "LogicLib.nsh"
 
-!define APP_NAME      "GooseRSS"
-!define APP_DISPLAY   "GooseRSS 阅读器"
-!define PUBLISHER     "Minecraftgoose"
-!define EXE_NAME      "GooseRSS.exe"
-!define UNINST_KEY    "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
-!define REPO_URL      "https://github.com/Minecraftgoose/GooseRSS/"
+Name "${APP_NAME} ${APP_VERSION} (Windows 7)"
+OutFile "dist\${OUT_NAME}"
+BrandingText "${APP_NAME} ${APP_VERSION}"
 
-Name "${APP_DISPLAY} ${APP_VERSION}"
-OutFile "dist\${APP_NAME}-Setup-${APP_VERSION}.exe"
-InstallDir "$PROGRAMFILES64\${APP_NAME}"
+InstallDir "$PROGRAMFILES64\${APP_DIR_NAME}"
 InstallDirRegKey HKLM "${UNINST_KEY}" "InstallLocation"
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
-SetCompressorDictSize 32
-XPStyle on
+ShowInstDetails show
+ShowUninstDetails show
 
-VIProductVersion "1.0.0.0"
-VIAddVersionKey "ProductName"     "${APP_DISPLAY}"
-VIAddVersionKey "CompanyName"     "${PUBLISHER}"
-VIAddVersionKey "FileDescription" "${APP_DISPLAY} 安装程序"
-VIAddVersionKey "FileVersion"     "1.0.0.0"
-VIAddVersionKey "ProductVersion"  "1.0.0.0"
-VIAddVersionKey "LegalCopyright"  "Copyright 2026 ${PUBLISHER}"
-
+!define MUI_ICON   "assets\app.ico"
+!define MUI_UNICON "assets\app.ico"
 !define MUI_ABORTWARNING
-!define MUI_UNABORTWARNING
-!define MUI_FINISHPAGE_RUN "$INSTDIR\${EXE_NAME}"
-!define MUI_FINISHPAGE_RUN_TEXT "立即启动 ${APP_DISPLAY}"
-!define MUI_FINISHPAGE_LINK "访问项目主页"
-!define MUI_FINISHPAGE_LINK_LOCATION "${REPO_URL}"
-!define MUI_FINISHPAGE_SHOWREADME ""
-!define MUI_FINISHPAGE_NOREBOOTSUPPORT
+!define MUI_FINISHPAGE_RUN "$INSTDIR\${APP_EXE}"
+!define MUI_FINISHPAGE_RUN_TEXT "运行 ${APP_NAME}"
 
-!insertmacro MUI_PAGE_LICENSE "LICENSE.utf8bom.txt"
-!insertmacro MUI_PAGE_COMPONENTS
+; 欢迎页 / 完成页左侧位图。必须放在插入 MUI_PAGE_WELCOME 之前才生效。
+; 只用 1 倍图（164x314，官方推荐尺寸，恰好填满），不设 NOSTRETCH：
+; 官方明确说明「恰好填满的整幅位图不要加 NOSTRETCH」，
+; 因为用户自定义 DPI 会改变控件实际尺寸，加了反而在缩放时被裁切/错位。
+; 位图尚未制作，暂不定义，使用 MUI 自带默认图。
+
+!insertmacro MUI_PAGE_WELCOME
+; LICENSE 原文件是 UTF-8 无 BOM（Python 打包要用，不能改），NSIS 读它会乱码。
+; CI 会先生成一份带 BOM 的副本供本页使用；本地直接编译则回退到原文件。
+!if /FileExists "LICENSE.utf8bom.txt"
+  !insertmacro MUI_PAGE_LICENSE "LICENSE.utf8bom.txt"
+!else
+  !insertmacro MUI_PAGE_LICENSE "LICENSE"
+!endif
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
-
-!insertmacro MUI_UNPAGE_WELCOME
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
-!insertmacro MUI_UNPAGE_FINISH
-
+; ⚠ MUI_LANGUAGE 必须排在所有 MUI_PAGE_* / MUI_UNPAGE_* 之后。
+; 放到前面会导致语言字符串未注入，欢迎页位图与界面文字加载失败（常见的白图/缺字坑）。
+; 新增页面时一律插在本行「之前」，不要插到后面。
 !insertmacro MUI_LANGUAGE "SimpChinese"
 
-Section "主程序 (必需)" SEC_MAIN
-  SectionIn RO
+; ------------------------------------------------------------------------------
+; 安装：整目录递归铺开（含 _internal/），写卸载信息，建快捷方式
+; ------------------------------------------------------------------------------
+Section "主程序 (必须)" SEC_MAIN
   SetOutPath "$INSTDIR"
 
-  File /r "dist\${APP_NAME}\*.*"
+  ; 覆盖安装前若存在旧版，先静默卸载，避免残留文件版本混杂
+  ${If} ${FileExists} "$INSTDIR\uninstall.exe"
+    DetailPrint "检测到旧版本，正在静默卸载…"
+    ExecWait '"$INSTDIR\uninstall.exe" /S _?=$INSTDIR'
+    Delete "$INSTDIR\uninstall.exe"
+  ${EndIf}
 
-  WriteRegStr HKLM "${UNINST_KEY}" "DisplayName"     "${APP_DISPLAY}"
-  WriteRegStr HKLM "${UNINST_KEY}" "DisplayVersion"  "${APP_VERSION}"
-  WriteRegStr HKLM "${UNINST_KEY}" "Publisher"       "${PUBLISHER}"
-  WriteRegStr HKLM "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKLM "${UNINST_KEY}" "UninstallString" "$INSTDIR\Uninstall.exe"
-  WriteRegStr HKLM "${UNINST_KEY}" "DisplayIcon"     "$INSTDIR\${EXE_NAME},0"
-  WriteRegStr HKLM "${UNINST_KEY}" "URLInfoAbout"    "${REPO_URL}"
+  ; onedir 产物：exe 与 _internal/ 一并递归打包
+  File /r "dist\${APP_DIR_NAME}\*.*"
+
+  WriteUninstaller "$INSTDIR\uninstall.exe"
+
+  ; 控制面板「程序和功能」条目
+  WriteRegStr   HKLM "${UNINST_KEY}" "DisplayName"     "${APP_NAME} (Windows 7)"
+  WriteRegStr   HKLM "${UNINST_KEY}" "DisplayVersion"  "${APP_VERSION}"
+  WriteRegStr   HKLM "${UNINST_KEY}" "Publisher"       "${APP_PUBLISHER}"
+  WriteRegStr   HKLM "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
+  WriteRegStr   HKLM "${UNINST_KEY}" "UninstallString" '"$INSTDIR\uninstall.exe"'
+  WriteRegStr   HKLM "${UNINST_KEY}" "QuietUninstallString" '"$INSTDIR\uninstall.exe" /S'
+  WriteRegStr   HKLM "${UNINST_KEY}" "DisplayIcon"     "$INSTDIR\${APP_EXE}"
+  WriteRegStr   HKLM "${UNINST_KEY}" "URLInfoAbout"    "${APP_URL}"
   WriteRegDWORD HKLM "${UNINST_KEY}" "NoModify" 1
   WriteRegDWORD HKLM "${UNINST_KEY}" "NoRepair" 1
 
-  ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
-  IntFmt $0 "0x%08X" $0
-  WriteRegDWORD HKLM "${UNINST_KEY}" "EstimatedSize" "$0"
+  ; 开始菜单 + 桌面快捷方式
+  CreateDirectory "$SMPROGRAMS\${APP_NAME}"
+  CreateShortCut  "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}" "" "$INSTDIR\${APP_EXE}" 0
+  CreateShortCut  "$SMPROGRAMS\${APP_NAME}\卸载 ${APP_NAME}.lnk" "$INSTDIR\uninstall.exe"
+  CreateShortCut  "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}" "" "$INSTDIR\${APP_EXE}" 0
 
-  WriteUninstaller "$INSTDIR\Uninstall.exe"
+  DetailPrint "安装完成：$INSTDIR"
 SectionEnd
 
-Section "开始菜单快捷方式" SEC_STARTMENU
-  CreateDirectory "$SMPROGRAMS\${APP_DISPLAY}"
-  CreateShortCut "$SMPROGRAMS\${APP_DISPLAY}\${APP_DISPLAY}.lnk" \
-    "$INSTDIR\${EXE_NAME}" "" "$INSTDIR\${EXE_NAME},0"
-  CreateShortCut "$SMPROGRAMS\${APP_DISPLAY}\卸载 ${APP_DISPLAY}.lnk" \
-    "$INSTDIR\Uninstall.exe"
-SectionEnd
-
-Section "桌面快捷方式" SEC_DESKTOP
-  CreateShortCut "$DESKTOP\${APP_DISPLAY}.lnk" \
-    "$INSTDIR\${EXE_NAME}" "" "$INSTDIR\${EXE_NAME},0"
-SectionEnd
-
-LangString DESC_SEC_MAIN      ${LANG_SIMPCHINESE} "GooseRSS 主程序与运行库"
-LangString DESC_SEC_STARTMENU ${LANG_SIMPCHINESE} "在开始菜单创建快捷方式"
-LangString DESC_SEC_DESKTOP   ${LANG_SIMPCHINESE} "在桌面创建快捷方式"
-
-!insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
-  !insertmacro MUI_DESCRIPTION_TEXT ${SEC_MAIN}      $(DESC_SEC_MAIN)
-  !insertmacro MUI_DESCRIPTION_TEXT ${SEC_STARTMENU} $(DESC_SEC_STARTMENU)
-  !insertmacro MUI_DESCRIPTION_TEXT ${SEC_DESKTOP}   $(DESC_SEC_DESKTOP)
-!insertmacro MUI_FUNCTION_DESCRIPTION_END
-
+; ------------------------------------------------------------------------------
+; 卸载：结束进程 → 清目录 → 清快捷方式与注册表
+; ------------------------------------------------------------------------------
 Section "Uninstall"
-  ExecWait 'taskkill /F /IM ${EXE_NAME} /T'
-  Sleep 500
+  ; 主程序无窗运行时也会驻留进程，先尝试结束，避免文件占用导致删不干净
+  nsExec::Exec 'taskkill /F /IM ${APP_EXE}'
+  Pop $0
 
   RMDir /r "$INSTDIR"
-
-  Delete "$SMPROGRAMS\${APP_DISPLAY}\${APP_DISPLAY}.lnk"
-  Delete "$SMPROGRAMS\${APP_DISPLAY}\卸载 ${APP_DISPLAY}.lnk"
-  RMDir  "$SMPROGRAMS\${APP_DISPLAY}"
-  Delete "$DESKTOP\${APP_DISPLAY}.lnk"
-
+  Delete "$DESKTOP\${APP_NAME}.lnk"
+  RMDir /r "$SMPROGRAMS\${APP_NAME}"
   DeleteRegKey HKLM "${UNINST_KEY}"
 SectionEnd

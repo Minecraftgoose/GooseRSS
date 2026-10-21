@@ -192,6 +192,25 @@ jobs:
             Write-Host "::warning::没有文件被 UPX 压缩，检查 --upx-dir 是否指向 upx.exe 所在目录"
           }
 
+      - name: Verify icon files
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # app.ico 供 PyInstaller 写 exe 图标、NSIS 写安装器图标共用，
+          # 必须含多个尺寸帧，否则资源管理器小图标视图取不到合适尺寸。
+          foreach ($p in @('assets\app.ico', 'assets\icons\tray.png', 'assets\icons\app.png')) {
+            if (-not (Test-Path $p)) { throw "图标文件缺失：$p" }
+            Write-Host "  OK $p（$(Get-Item $p | Select-Object -ExpandProperty Length) 字节）"
+          }
+
+          $ico = [System.IO.File]::ReadAllBytes('assets\app.ico')
+          if (-not ($ico.Length -ge 4 -and $ico[0] -eq 0 -and $ico[1] -eq 0 -and $ico[2] -eq 1 -and $ico[3] -eq 0)) {
+            throw 'app.ico 不是合法 ICO 文件（头 4 字节应为 00 00 01 00）'
+          }
+          $frames = [BitConverter]::ToUInt16($ico, 4)
+          Write-Host "  ICO 文件头校验通过，含 $frames 个尺寸帧"
+          if ($frames -lt 4) { throw "app.ico 只有 $frames 帧，小尺寸场景会取不到图标" }
+
       - name: Set up NSIS
         shell: pwsh
         run: |
@@ -296,62 +315,13 @@ jobs:
           if ($langLine -lt $lastPage) { throw "MUI_LANGUAGE（第 $($langLine+1) 行）必须排在所有 MUI_PAGE_*（最后在第 $($lastPage+1) 行）之后" }
           Write-Host "结构检查通过：MUI_LANGUAGE 在第 $($langLine+1) 行，最后一个页面宏在第 $($lastPage+1) 行"
 
-      - name: Stamp installer version into installer.nsi
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $dot = $env:APP_VERSION_DOT
-          if (-not $dot) { throw "APP_VERSION_DOT 为空，无法写入安装器版本号" }
-          if ($dot -notmatch '^\d+\.\d+\.\d+\.\d+$') { throw "版本号不是四段数字：$dot" }
-
-          # 直接把四段版本号写进 nsi 的字面量，不依赖 makensis 的 /D 传参。
-          # 原因：/D 传空值时 NSIS 仍认为符号"已定义"，展开成空串，
-          # 而 !ifndef 不会兜底 —— 报的正是 VIProductVersion 格式错误。
-          $utf8bom = New-Object System.Text.UTF8Encoding($true)
-          $path = 'installer.nsi'
-          $text = [System.IO.File]::ReadAllText($path, $utf8bom)
-
-          $ver = $env:APP_VERSION
-          if (-not $ver) { throw "APP_VERSION 为空，无法写入安装器文件名" }
-
-          $vip    = 'VIProductVersion "' + $dot + '"'
-          $fver   = "`$1'" + $dot + "'"
-          $pver   = "`$1'" + $dot + "'"
-          $defver = '!define APP_VERSION "' + $ver + '"'
-
-          $text = [regex]::Replace($text, 'VIProductVersion\s+"[^"]*"', $vip)
-          $text = [regex]::Replace($text, "('FileVersion',\s*)'[^']*'", $fver)
-          $text = [regex]::Replace($text, "('ProductVersion',\s*)'[^']*'", $pver)
-          $text = [regex]::Replace($text, '!define APP_VERSION\s+"[^"]*"', $defver)
-
-          [System.IO.File]::WriteAllText($path, $text, $utf8bom)
-
-          # 回读校验：把实际生效的那两行打出来，方便一眼看出 makensis 拿到了什么
-          $actual = (Select-String -Path $path -Pattern 'VIProductVersion').Line.Trim()
-          Write-Host "写入后：$actual"
-          if ($actual -notmatch 'VIProductVersion\s+"\d+\.\d+\.\d+\.\d+"') {
-            throw "VIProductVersion 写入后格式仍不对：$actual"
-          }
-
-          # 校验 !define 那一行，而不是 OutFile 那一行：
-          # OutFile 里写的是 ${APP_VERSION} 宏引用，原文不含版本号，
-          # 拿它比对必然失败（真正的版本号来自上面替换掉的 !define）。
-          $def = (Select-String -Path $path -Pattern '!define APP_VERSION ').Line.Trim()
-          Write-Host "版本定义：$def"
-          if ($def -notmatch [regex]::Escape($ver)) {
-            throw "!define APP_VERSION 未写入真实版本号（期望含 $ver）：$def"
-          }
-
-          $out = (Select-String -Path $path -Pattern '^OutFile').Line.Trim()
-          Write-Host "输出文件：$out"
-
       - name: Build installer with NSIS
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $makensis = $env:MAKENSIS
           if (-not $makensis -or -not (Test-Path $makensis)) { throw "makensis 路径无效：$makensis" }
-          & $makensis /V2 /INPUTCHARSET UTF8 installer.nsi
+          & $makensis /V2 /INPUTCHARSET UTF8 /DAPP_VERSION=$env:APP_VERSION installer.nsi
           if ($LASTEXITCODE -ne 0) { throw "makensis 编译失败（退出码 $LASTEXITCODE）" }
 
           $setup = "dist/$env:APP_NAME-Setup-$env:APP_VERSION.exe"
