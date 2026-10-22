@@ -292,7 +292,17 @@ jobs:
           if (-not ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)) {
             throw 'installer.nsi 缺少 UTF-8 BOM（EF BB BF），编译出的界面中文会乱码'
           }
-          Write-Host 'installer.nsi 编码检查通过：UTF-8 with BOM'
+
+          # 只检查前 3 字节不够：makensis 只剥一个 BOM，多出来的 U+FEFF 会变成
+          # 文件里的第一个字符，导致 Invalid command 报错。必须全文数量恰好为 1。
+          $bomCount = 0
+          for ($i = 0; $i -le $bytes.Length - 3; $i++) {
+            if ($bytes[$i] -eq 0xEF -and $bytes[$i+1] -eq 0xBB -and $bytes[$i+2] -eq 0xBF) { $bomCount++ }
+          }
+          if ($bomCount -ne 1) {
+            throw "installer.nsi 的 BOM 数量应为 1，实际为 $bomCount（多余 BOM 会导致 Invalid command 报错）"
+          }
+          Write-Host "installer.nsi 编码检查通过：UTF-8 with BOM（$bomCount 个）"
 
           $utf8bom = New-Object System.Text.UTF8Encoding($true)
           [System.IO.File]::WriteAllText('LICENSE.utf8bom.txt', [System.IO.File]::ReadAllText('LICENSE'), $utf8bom)
