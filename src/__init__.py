@@ -7,8 +7,7 @@
     pywebview          界面窗口（Win10/11 用 Edge WebView2，Win7 降级到 IE11）
     feedparser         RSS / Atom / RDF / JSON Feed 解析
     requests           HTTP 请求
-    pystray + Pillow   系统托盘与图标（可选）
-    winotify           Win10/11 Toast 通知（可选，默认不用）
+    pystray + Pillow   系统托盘与通知（通知即托盘气球，可选）
 
 Python 3.6+ / Windows 7 及以上均可运行。
 """

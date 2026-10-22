@@ -1067,7 +1067,6 @@
     $('s-max-total').value = s.notify_max_total || 8;
     $('s-sound').checked = s.notify_sound !== false;
     $('s-system').checked = s.notify_system !== false;
-    $('s-toast').checked = !!s.notify_prefer_toast;
     $('s-quiet').value = s.notify_silent_hours || '';
     $('s-interval').value = s.auto_refresh_interval_min || 5;
     $('s-timeout').value = s.refresh_timeout || 15;
@@ -1113,7 +1112,6 @@
       notify_max_total: parseInt($('s-max-total').value, 10) || 8,
       notify_sound: $('s-sound').checked,
       notify_system: $('s-system').checked,
-      notify_prefer_toast: $('s-toast').checked,
       notify_silent_hours: $('s-quiet').value,
       auto_refresh_interval_min: parseInt($('s-interval').value, 10) || 5,
       refresh_timeout: parseInt($('s-timeout').value, 10) || 15,
@@ -1317,7 +1315,6 @@
     $('btn-test-notify').onclick = function () {
       var backendNames = {
         balloon: '托盘气球',
-        toast: '系统 Toast',
         bubble: '页面气泡'
       };
       call('test_notification', []).then(function (r) {

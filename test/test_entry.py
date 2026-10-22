@@ -82,10 +82,12 @@ def main():
 
     print("\n[3] 前端文件齐全（缺一个界面就打不开）")
     web = os.path.join(ROOT, "web")
-    for name in ("index.html", "app.css", "app.js",
-                 "reader.html", "reader.js"):
+    # reader.html / reader.js 已在 SPA 改造时删除，阅读页并入 index.html
+    for name in ("index.html", "app.css", "app.js"):
         check(os.path.isfile(os.path.join(web, name)),
               "web/%s 存在" % name)
+    index_html = open(os.path.join(web, "index.html"), encoding="utf-8").read()
+    check('id="view-reader"' in index_html, "index.html 含 SPA 阅读页")
     icons = os.path.join(web, "icons")
     count = len([n for n in os.listdir(icons)
                  if n.lower().endswith(".png")]) if os.path.isdir(icons) else 0

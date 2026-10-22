@@ -55,12 +55,11 @@ def main():
         ("requests", "网络请求"),
         ("PIL", "Pillow，图标缩放与托盘角标"),
         ("pystray", "系统托盘常驻（Windows 内部即 Shell_NotifyIcon）"),
-        ("winotify", "Win10/11 原生 Toast 通知（可选，缺失时降级）"),
         ("pywinstyles", "Windows 标题栏配色（PyPI 包名 pywinstyles，"
                         "不是 GitHub 仓库名 py-window-styles）"),
     ]
     for module, desc in packages:
-        optional = module in ("winotify", "pywinstyles")
+        optional = module in ("pywinstyles",)
         try:
             __import__(module)
             results.append(line(OK, "%-14s %s" % (module, desc)))
@@ -128,12 +127,11 @@ def main():
         backends = notifier_module.describe_backends()
         for key, name in backends:
             print("     %-9s %s" % (key, name))
-        if any(key == "toast" for key, _ in backends):
-            print(OK + "Win10/11 原生 Toast 可用（通知可点击、进操作中心）")
-        elif notifier_module.is_win7():
-            print(OK + "Windows 7：使用 Shell_NotifyIcon 托盘气球（Win7 唯一可用的系统通知）")
+        keys = [key for key, _ in backends]
+        if "balloon" in keys:
+            print(OK + "托盘气球可用（Shell_NotifyIcon，Win7 起全版本通用）")
         else:
-            print(WARN + "没有系统通知后端，将使用自绘气泡兜底")
+            print(WARN + "没有系统通知后端，将使用页面气泡兜底")
     except Exception as exc:
         results.append(line(FAIL, "通知模块加载失败：%s" % exc))
 

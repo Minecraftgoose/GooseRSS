@@ -132,12 +132,7 @@ DEFAULTS = {
     "open_links_in_browser": True,
     # ---- 通知（通知器核心）----
     "notify_enabled": True,          # 总开关
-    "notify_system": True,           # 系统通知
-    # 默认 False：走 Shell_NotifyIcon 气球（Win7 起全版本通用、实测最稳）。
-    # 置 True 则在 Win10/11 上优先用 Toast —— 但 Toast 在未注册 AUMID 时
-    # 会静默失败（不抛异常、不弹窗），且会挡住后面所有降级路径，
-    # 有问题就把它改回 False。
-    "notify_prefer_toast": False,
+    "notify_system": True,           # 系统通知（托盘气球，全 Windows 版本通用）
     "notify_sound": True,            # 提示音
     "notify_tray_bubble": True,      # 托盘气泡（自绘，与系统通知互补）
     "notify_badge": True,            # 托盘图标叠加未读角标

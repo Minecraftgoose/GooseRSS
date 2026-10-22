@@ -1,26 +1,22 @@
 # -*- coding: utf-8 -*-
 """新文章通知引擎。
 
-Windows 上「全版本通用」的通知接口其实有两套，能力不一样：
+Windows 上只用一条路径：**pystray 的托盘气球（Shell_NotifyIcon + NIF_INFO）**。
 
-    接口                              Win7   Win8   Win10/11
-    Shell_NotifyIcon + NIF_INFO 气球   ✅     ✅     ✅
-    Toast 通知                         ❌     ✅     ✅
+    icon.notify(message, title)  →  Shell_NotifyIcon  →  托盘气球
 
-默认顺序是 **气球优先**，这不是随意排的：
+这是 Windows 全版本通用的传统兼容层：
 
-  · 气球走 Shell_NotifyIcon，Win7 起全版本通用，且由托盘图标直接发出，
-    不需要任何额外注册 —— 实测最稳。
-  · Toast（winotify）看起来更现代，但它要求应用已注册 AUMID；
-    Python 脚本通常没有，此时 `toast.show()` **不抛异常也不弹通知**，
-    调用方无从判断失败，于是永远不会降级到气球 —— 用户看到的就是
-    "通知完全没反应"。
+  · Win7：气球通知的原生舞台，行为最标准。
+  · Win10/11：气球被系统接管，以 Toast 样式呈现，依然可用。
 
-所以把 Toast 降级为可选（设置项 `notify_prefer_toast`，默认关），
-想用的自己打开，出问题也知道去哪儿找。
+为什么不碰 winotify 那类"原生 Toast"库：它们要求应用已注册 AUMID，
+而 Python 脚本通常没有注册，此时 `toast.show()` **既不抛异常也不弹通知** ——
+调用方拿到的是"成功"，于是永远不会降级，用户看到的就是通知毫无反应。
+用一个旧接口换全版本稳定，比追求现代交互更划算。
 
-所有后端都包在 try/except 里：任何一个失败都自动往下一层降，不会因为通知
-功能把主程序拖垮。
+后端顺序固定为：气球 → 页面气泡（托盘没起来时的兜底）。
+所有调用都包在 try/except 里，通知出问题不会拖垮主程序。
 """
 
 import os
@@ -57,31 +53,16 @@ def is_win7():
     return bool(version) and version[:2] == (6, 1)
 
 
-def _has_winotify():
-    if not IS_WINDOWS or not is_win10_or_later():
-        return False
-    try:
-        import winotify  # noqa: F401
-        return True
-    except Exception:
-        return False
-
-
-def available_backends(prefer_toast=False):
+def available_backends():
     """返回当前环境可用的通知后端，按优先级排序。
 
-    默认气球优先（Win7 起全版本通用、实测最稳）。
-    prefer_toast=True 时才把 Toast 排到前面 —— 但注意 Toast 失败是静默的，
-    排在前面就意味着它可能"吞掉"后续所有降级路径。
+    Windows 上唯一的系统级后端就是托盘气球（Shell_NotifyIcon），
+    不引入任何需要注册 AUMID 的 Toast 库 —— 那种库失败是静默的，
+    一旦排在前面就会吞掉后面的降级路径。
     """
     backends = []
     if IS_WINDOWS:
-        if prefer_toast and _has_winotify():
-            backends.append("toast")
         backends.append("balloon")
-        # Toast 可用但没排前面时，仍作为气球之后的第二选择
-        if not prefer_toast and _has_winotify():
-            backends.append("toast")
     backends.append("bubble")
     return backends
 
@@ -89,7 +70,6 @@ def available_backends(prefer_toast=False):
 def describe_backends():
     """给设置界面 / 自检脚本用的中文说明。"""
     names = {
-        "toast": "系统 Toast",
         "balloon": "托盘气球",
         "bubble": "页面气泡",
     }
@@ -194,7 +174,7 @@ class Notifier(object):
     def notify(self, title, message, url=""):
         """发一条通知。返回实际使用的后端名，全部失败返回 ""。
 
-        会依次尝试：系统通知 → 托盘气球 → 自绘气泡。
+        依次尝试：托盘气球 → 页面气泡。
         """
         self._last_error = ""
         if not self.enabled():
@@ -203,18 +183,13 @@ class Notifier(object):
             self._last_error = "免打扰时段"
             return ""
 
-        backends = []
         if self.settings.get("notify_system", True):
-            prefer_toast = bool(self.settings.get("notify_prefer_toast", False))
-            backends.extend(available_backends(prefer_toast=prefer_toast))
-        elif "bubble" not in backends:
-            backends.append("bubble")
+            backends = available_backends()
+        else:
+            backends = ["bubble"]
 
         for name in backends:
             try:
-                if name == "toast" and self._try_toast(title, message, url):
-                    self._after_success()
-                    return "toast"
                 if name == "balloon" and self._try_balloon(title, message):
                     self._after_success()
                     return "balloon"
@@ -231,45 +206,18 @@ class Notifier(object):
             play_sound()
 
     # ------------------------------------------------------------------
-    # 后端 1：Win10/11 Toast
-    # ------------------------------------------------------------------
-    def _try_toast(self, title, message, url=""):
-        if not _has_winotify():
-            return False
-        from winotify import Notification, audio
-        toast = Notification(app_id=self._app_id, title=title, msg=message,
-                             icon=self.icon_path or "")
-        try:
-            if self.settings.get("notify_sound", True):
-                toast.set_audio(audio.Default, loop=False)
-            else:
-                toast.set_audio(audio.Silent, loop=False)
-        except Exception:
-            pass
-        # 点击通知直接打开原文（用户选定的行为）
-        if url and self.settings.get("notify_open_on_click", True):
-            try:
-                toast.add_actions(label="打开原文", launch=url)
-            except Exception:
-                pass
-        toast.show()
-        return True
-
-    # ------------------------------------------------------------------
-    # 后端 2：Shell_NotifyIcon 气球（pystray 内部实现，Win7 起通用）
+    # 后端 1：Shell_NotifyIcon 气球（pystray 内部实现，Win7 起通用）
     # ------------------------------------------------------------------
     def _try_balloon(self, title, message):
+        """托盘气球。Windows 上唯一的系统级通知方式。
+
+        不做能力预判，直接调用，让 pystray 自己处理平台差异；
+        失败就记下来往下层降。
+        """
         icon = self.tray_icon
         if icon is None:
             return False
         try:
-            if not getattr(icon, "HAS_NOTIFICATION", False):
-                return False
-            # 一次只显示一条：先清掉上一条，否则会被排队、延迟很久才出现
-            try:
-                icon.remove_notification()
-            except Exception:
-                pass
             icon.notify(message, title=title)
             return True
         except Exception as exc:
@@ -277,7 +225,7 @@ class Notifier(object):
             return False
 
     # ------------------------------------------------------------------
-    # 后端 3：自绘 Tk 气泡（所有平台兜底）
+    # 后端 2：页面气泡（托盘不可用时的兜底）
     # ------------------------------------------------------------------
     def _try_bubble(self, title, message):
         """页面内气泡：把内容交给前端渲染（Win7 且无托盘时的兜底）。"""
